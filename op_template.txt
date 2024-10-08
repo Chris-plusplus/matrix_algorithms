@@ -1,9 +1,5 @@
-#include <iostream>
-#include <format>
 #include <array>
 #include <string_view>
-#include <chrono>
-#include <cstdlib>
 
 namespace operation_counting {
 
@@ -58,26 +54,4 @@ void increment_counter() noexcept {
 #define op(...) op_impl(__VA_ARGS__)
 //#define op(...) __VA_ARGS__
 
-}
-
-namespace chr = std::chrono;
-using clk = chr::high_resolution_clock;
-
-int main() {
-	double x = rand();
-	double y = rand();
-
-	for (size_t j = 0; j != 20; ++j) {
-		auto start = clk::now();
-		for (size_t i = 0; i != 10'000'000; ++i) {
-			op(x = x + y);
-			op(x = x * y + x);
-			op(x = x / y + x);
-			op(x = x - y);
-		}
-		auto end = clk::now();
-		std::cout << std::format("10'000'000 * 4 ops took: {}\n", chr::duration_cast<chr::milliseconds>(end - start));
-	}
-
-	std::cout << std::format("x = {}\ny = {}\n", x, y);
 }

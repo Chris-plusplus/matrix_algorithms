@@ -2,6 +2,7 @@ out/
 .vs/
 cmake/conan_files
 build/
+CMakeSettings.json
 # Prerequisites
 *.d
 
