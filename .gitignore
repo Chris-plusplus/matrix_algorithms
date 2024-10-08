@@ -1,3 +1,6 @@
+out/
+.vs/
+cmake/conan_files
 # Prerequisites
 *.d
 
