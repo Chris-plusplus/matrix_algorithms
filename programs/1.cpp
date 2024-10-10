@@ -15,6 +15,12 @@ enum class operation {
 
 size_t counter[(size_t)operation::unknown]{};
 
+void reset() noexcept {
+	for (auto&& v : counter) {
+		v = 0;
+	}
+}
+
 consteval std::array<size_t, 4> parse_operation(std::string_view str) noexcept {
 	std::array<size_t, 4> result{};
 	for (auto&& c : str) {
@@ -66,15 +72,11 @@ void increment_counter() noexcept {
 namespace chr = std::chrono;
 using clk = chr::high_resolution_clock;
 
+/// @brief Klasa macierzy, dane przechowywane w jednym ciągłym wektorze (cache-friendly)
 class Matrix {
 public:
 
 	Matrix(size_t size) noexcept: _size{ size }, _storage(_size * _size) {}
-
-	/*Matrix(const Matrix&) noexcept = default;
-	Matrix(Matrix&&) noexcept = default;
-	Matrix& operator=(const Matrix&) noexcept = default;
-	Matrix& operator=(Matrix&&) noexcept = default;*/
 
 	auto begin() noexcept { return _storage.begin(); }
 
@@ -204,7 +206,11 @@ private:
 	std::vector<double> _storage{};
 };
 
+/// @brief Rozdziela zadaną macierz na 4 mniejsze
+/// @brief ich rozmiar jest potęgą 2
 std::array<Matrix, 4> split_matrix(const Matrix& A) noexcept {
+	// rozszerza macierz do rozmiaru potęgi 2
+
 	// rozmiar podmacierzy po rozszerzeniu
 	const auto subsize = std::bit_ceil(A.size()) >> 1;
 	std::array<Matrix, 4> result{
@@ -239,22 +245,58 @@ Matrix binet_recursive(const Matrix& A, const Matrix& B) noexcept {
 		C_11 += binet_recursive(A_12, B_21);
 		C.set_at({ 0, 0 }, C_11);
 	}
-
 	{
 		auto C_12 = binet_recursive(A_11, B_12);
 		C_12 += binet_recursive(A_12, B_22);
 		C.set_at({ 0, subsize }, C_12);
 	}
-
 	{
 		auto C_21 = binet_recursive(A_21, B_11);
 		C_21 += binet_recursive(A_22, B_21);
 		C.set_at({ subsize, 0 }, C_21);
 	}
-
 	{
 		auto C_22 = binet_recursive(A_21, B_12);
 		C_22 += binet_recursive(A_22, B_22);
+		C.set_at({ subsize, subsize }, C_22);
+	}
+
+	return C;
+}
+
+Matrix strassen_recursive(const Matrix& A, const Matrix& B) noexcept {
+	if (A.size() == 1) {
+		return op(Matrix({ { (A[{ 0, 0 }]) * (B[{ 0, 0 }]) } }));
+	}
+
+	auto&& [A_11, A_12, A_21, A_22] = split_matrix(A);
+	auto&& [B_11, B_12, B_21, B_22] = split_matrix(B);
+
+	auto M_1 = strassen_recursive(A_11 + A_22, B_11 + B_22);
+	auto M_2 = strassen_recursive(A_21 + A_22, B_11);
+	auto M_3 = strassen_recursive(A_11, B_12 - B_22);
+	auto M_4 = strassen_recursive(A_22, B_21 - B_11);
+	auto M_5 = strassen_recursive(A_11 + A_12, B_22);
+	auto M_6 = strassen_recursive(A_21 - A_11, B_11 + B_12);
+	auto M_7 = strassen_recursive(A_12 - A_22, B_21 + B_22);
+
+	auto C = Matrix(A.size());
+	const auto subsize = A_11.size();
+
+	{
+		auto C_11 = M_1 + M_4 - M_5 + M_7;
+		C.set_at({ 0, 0 }, C_11);
+	}
+	{
+		auto C_12 = M_3 + M_5;
+		C.set_at({ 0, subsize }, C_12);
+	}
+	{
+		auto C_21 = M_2 + M_4;
+		C.set_at({ subsize, 0 }, C_21);
+	}
+	{
+		auto C_22 = M_1 - M_2 + M_3 + M_6;
 		C.set_at({ subsize, subsize }, C_22);
 	}
 
@@ -282,19 +324,39 @@ int main() {
 		{ 4, 5 }
 	};*/
 
-	const size_t N = 200;
+	// należy założyć że N zwiększy się do najbliższej >= potęgi 2
+	const size_t N = 256;
 
 	auto mat1 = Matrix::random(N, 0);
 	auto mat2 = Matrix::random(N, 1);
 
-	auto start = clk::now();
-	auto mat3 = binet_recursive(mat1, mat2);
-	auto end = clk::now();
+	{
+		auto start = clk::now();
+		auto mat3 = binet_recursive(mat1, mat2);
+		auto end = clk::now();
 
-	std::cout << std::format(
-		"add: {}\nmul: {}\ntime: {}\n",
-		operation_counting::counter[0],
-		operation_counting::counter[2],
-		chr::duration_cast<chr::milliseconds>(end - start)
-	);
+		std::cout << std::format(
+			"+: {}\n-: {}\n*: {}\n/: {}\ntime: {}\n",
+			operation_counting::counter[0],
+			operation_counting::counter[1],
+			operation_counting::counter[2],
+			operation_counting::counter[3],
+			chr::duration_cast<chr::milliseconds>(end - start)
+		);
+	}
+	operation_counting::reset();
+	{
+		auto start = clk::now();
+		auto mat3 = strassen_recursive(mat1, mat2);
+		auto end = clk::now();
+
+		std::cout << std::format(
+			"+: {}\n-: {}\n*: {}\n/: {}\ntime: {}\n",
+			operation_counting::counter[0],
+			operation_counting::counter[1],
+			operation_counting::counter[2],
+			operation_counting::counter[3],
+			chr::duration_cast<chr::milliseconds>(end - start)
+		);
+	}
 }
