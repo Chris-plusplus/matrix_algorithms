@@ -1,7 +1,7 @@
 #include <array>
 #include <string_view>
 
-namespace operation_counting {
+namespace operation_counting  {
 
 enum class operation {
 	add,
@@ -13,19 +13,22 @@ enum class operation {
 
 size_t counter[(size_t)operation::unknown]{};
 
+void reset() noexcept {
+	for (auto&& v : counter) {
+		v = 0;
+	}
+}
+
 consteval std::array<size_t, 4> parse_operation(std::string_view str) noexcept {
 	std::array<size_t, 4> result{};
 	for (auto&& c : str) {
 		if (c == '+') {
 			++result[(size_t)operation::add];
-		}
-		else if (c == '-') {
+		} else if (c == '-') {
 			++result[(size_t)operation::sub];
-		}
-		else if (c == '*') {
+		} else if (c == '*') {
 			++result[(size_t)operation::mul];
-		}
-		else if (c == '/') {
+		} else if (c == '/') {
 			++result[(size_t)operation::div];
 		}
 	}
@@ -49,9 +52,10 @@ void increment_counter() noexcept {
 	}
 }
 
-#define op_impl(...) (operation_counting::increment_counter<operation_counting::parse_operation(#__VA_ARGS__)>(), __VA_ARGS__)
+#define op_impl(...) \
+	(operation_counting::increment_counter<operation_counting::parse_operation(#__VA_ARGS__)>(), __VA_ARGS__)
 
 #define op(...) op_impl(__VA_ARGS__)
-//#define op(...) __VA_ARGS__
+// #define op(...) __VA_ARGS__
 
-}
+} // namespace operation_counting
