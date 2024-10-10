@@ -117,8 +117,6 @@ public:
 
 	const double& operator[](const std::array<size_t, 2> idx) const noexcept {
 		return _storage[_size * idx[0] + idx[1]];
-		// static double zero{};
-		// return idx[0] >= _size or idx[1] >= _size ? zero : _storage[_size * idx[0] + idx[1]];
 	}
 
 	Matrix& operator+=(const Matrix& other) noexcept {
@@ -155,6 +153,10 @@ public:
 		return temp;
 	}
 
+	/// @brief Kopiuje dane z innej macierzy
+	/// @param idx - miejsce gdzie skopiować
+	/// @param other - macierz z której kopiować
+	/// @param subidx - miejsce skąd kopiować
 	Matrix& set_at(
 		const std::array<size_t, 2> idx,
 		const Matrix& other,
@@ -325,38 +327,47 @@ int main() {
 	};*/
 
 	// należy założyć że N zwiększy się do najbliższej >= potęgi 2
-	const size_t N = 256;
+	// const size_t N = 256;
 
-	auto mat1 = Matrix::random(N, 0);
-	auto mat2 = Matrix::random(N, 1);
+	for (size_t i = 1; i != 9 + 1; ++i) {
+		const size_t N = (size_t)1 << i;
 
-	{
-		auto start = clk::now();
-		auto mat3 = binet_recursive(mat1, mat2);
-		auto end = clk::now();
+		auto mat1 = Matrix::random(N, 0);
+		auto mat2 = Matrix::random(N, 1);
 
-		std::cout << std::format(
-			"+: {}\n-: {}\n*: {}\n/: {}\ntime: {}\n",
-			operation_counting::counter[0],
-			operation_counting::counter[1],
-			operation_counting::counter[2],
-			operation_counting::counter[3],
-			chr::duration_cast<chr::milliseconds>(end - start)
-		);
-	}
-	operation_counting::reset();
-	{
-		auto start = clk::now();
-		auto mat3 = strassen_recursive(mat1, mat2);
-		auto end = clk::now();
+		{
+			auto start = clk::now();
+			auto mat3 = binet_recursive(mat1, mat2);
+			auto end = clk::now();
 
-		std::cout << std::format(
-			"+: {}\n-: {}\n*: {}\n/: {}\ntime: {}\n",
-			operation_counting::counter[0],
-			operation_counting::counter[1],
-			operation_counting::counter[2],
-			operation_counting::counter[3],
-			chr::duration_cast<chr::milliseconds>(end - start)
-		);
+			std::cout << std::format("{}\n", (end - start).count());
+
+			/*std::cout << std::format(
+				"+: {}\n-: {}\n*: {}\n/: {}\ntime: {}\n",
+				operation_counting::counter[0],
+				operation_counting::counter[1],
+				operation_counting::counter[2],
+				operation_counting::counter[3],
+				chr::duration_cast<chr::milliseconds>(end - start)
+			);*/
+		}
+		operation_counting::reset();
+		{
+			auto start = clk::now();
+			auto mat3 = strassen_recursive(mat1, mat2);
+			auto end = clk::now();
+
+			std::cout << std::format("{}\n", (end - start).count());
+
+			/*std::cout << std::format(
+				"+: {}\n-: {}\n*: {}\n/: {}\ntime: {}\n",
+				operation_counting::counter[0],
+				operation_counting::counter[1],
+				operation_counting::counter[2],
+				operation_counting::counter[3],
+				chr::duration_cast<chr::milliseconds>(end - start)
+			);*/
+		}
+		std::cout << '\n';
 	}
 }

@@ -1,6 +1,6 @@
 include_guard()
 
-include("${PROJECT_SOURCE_DIR}/cmake/conan.cmake")
+#include("${PROJECT_SOURCE_DIR}/cmake/conan.cmake")
 
 add_library(${PROJECT_NAME})
 
