@@ -35,3 +35,7 @@ CMakeSettings.json
 *.exe
 *.out
 *.app
+
+# Python
+.idea
+__pycache__/
