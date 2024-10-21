@@ -164,7 +164,6 @@ def mat_mul(A, B):
             for i in range(5):
                 if f"C{a}{b}" not in subC:
                     subC[f"C{a}{b}"] = 0
-                #subC[f"C{a}{b}"] += mat_mul(subA[f"A{a}{i}"], subB[f"B{i}{b}"])
                 if np.all(np.equal(subA[f"A{a}{i}"], 0)) or np.all(np.equal(subB[f"B{i}{b}"], 0)):
                     subC[f"C{a}{b}"] += np.zeros((len(subA[f"A{a}{i}"]), len(subB[f"B{i}{b}"])))
                 else:
