@@ -426,10 +426,6 @@ Matrix strassen_recursive(const Matrix& A, const Matrix& B) noexcept(!MATRIX_DEB
 	auto&& [A_11, A_12, A_21, A_22] = A.split(true);
 	auto&& [B_11, B_12, B_21, B_22] = B.split(false);
 
-	/*if (A.rows() % 2) {
-		1 + 1;
-	}*/
-
 	auto M_1 = strassen_recursive(A_11 + A_22, B_11 + B_22);
 	auto M_4 = strassen_recursive(A_22, B_21 - B_11);
 	auto M_5 = strassen_recursive(A_11 + A_12, B_22);
@@ -591,23 +587,56 @@ int main() {
 
 	// const size_t N = 256;
 
-	auto times_binet = std::ofstream("times_binet2.txt");
-	auto times_strassen = std::ofstream("times_strassen2.txt");
-	auto ops_binet = std::ofstream("ops_binet2.txt");
-	auto ops_strassen = std::ofstream("ops_strassen2.txt");
+	auto mat1 = Matrix::random(10, 10, 0);
+	auto mat2 = Matrix::random(10, 10, 1);
+
+	auto mat_binet = binet_recursive(mat1, mat2);
+	auto mat_strassen = strassen_recursive(mat1, mat2);
+
+	std::cout << "[\n";
+	mat1.print();
+	std::cout << "]\n";
+	std::cout << "[\n";
+	mat2.print();
+	std::cout << "]\n";
+	std::cout << "[\n";
+	mat_binet.print();
+	std::cout << "]\n";
+	std::cout << "[\n";
+	mat_strassen.print();
+	std::cout << "]\n";
+
+	return 0;
+
+	auto times_binet = std::ofstream("times_binet4.txt");
+	auto times_strassen = std::ofstream("times_strassen4.txt");
+	auto ops_binet = std::ofstream("ops_binet4.txt");
+	auto ops_strassen = std::ofstream("ops_strassen4.txt");
 	times_binet << "N\ttime(ms)\n";
 	times_strassen << "N\ttime(ms)\n";
 	ops_binet << "N\t+\t-\t*\t/\n";
 	ops_strassen << "N\t+\t-\t*\t/\n";
 
-	for (size_t i = 2; i != 25 + 1; ++i) {
+	for (size_t i = 1; i <= 1'000; i += [i]() {
+			 if (i < 150) {
+				 return 1;
+			 } else if (i < 250) {
+				 return 5;
+			 } else if (i < 500) {
+				 return 10;
+			 } else {
+				 return 100;
+			 }
+		 }()) {
 		const size_t N = i;
 		//(size_t)1 << i;
 
 		std::cout << i << '\n';
 
 		auto mat1 = Matrix::random(N, N, 0);
+		std::cout << i << '\n';
 		auto mat2 = Matrix::random(N, N, 1);
+		std::cout << i << '\n';
 
 		operation_counting::reset();
 		{
@@ -634,6 +663,7 @@ int main() {
 			);
 			operation_counting::reset();
 		}
+		std::cout << i << '\n';
 		{
 			auto start = clk::now();
 			auto mat3 = strassen_recursive(mat1, mat2);
