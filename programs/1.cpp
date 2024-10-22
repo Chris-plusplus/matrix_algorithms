@@ -1,3 +1,10 @@
+#include <chrono>
+#include <format>
+#include <fstream>
+#include <iostream>
+#include <random>
+#include <stacktrace>
+
 #pragma region operation_counting
 
 #include <array>
@@ -57,19 +64,12 @@ void increment_counter() noexcept {
 #define op_impl(...) \
 	(operation_counting::increment_counter<operation_counting::parse_operation(#__VA_ARGS__)>(), __VA_ARGS__)
 
-#define op(...) op_impl(__VA_ARGS__)
-// #define op(...) __VA_ARGS__
+// #define op(...) op_impl(__VA_ARGS__)
+#define op(...) __VA_ARGS__
 
 } // namespace operation_counting
 
 #pragma endregion
-
-#include <chrono>
-#include <format>
-#include <fstream>
-#include <iostream>
-#include <random>
-#include <stacktrace>
 
 namespace chr = std::chrono;
 using clk = chr::high_resolution_clock;
@@ -220,9 +220,9 @@ public:
 		ASSERT(_cols == other._rows);
 
 		auto result = Matrix(_rows, other._cols);
-		for (int i = 0; i < _rows; ++i) {
-			for (int j = 0; j < other._cols; ++j) {
-				for (int k = 0; k < _cols; ++k) {
+		for (unsigned int i = 0; i < _rows; ++i) {
+			for (unsigned int j = 0; j < other._cols; ++j) {
+				for (unsigned int k = 0; k < _cols; ++k) {
 					auto& in_result = result._storage[i * other._cols + j];
 					auto& in_this = this->_storage[i * _cols + k];
 					auto& in_other = other._storage[k * other._cols + j];
@@ -286,9 +286,12 @@ public:
 	void print() const noexcept {
 		for (size_t row = 0; row < _rows; ++row) {
 			for (size_t col = 0; col < _cols; ++col) {
-				std::cout << (*this)[{ row, col }] << '\t';
+				std::cout << (*this)[{ row, col }];
+				if (col < _cols - 1) {
+					std::cout << ",\t";
+				}
 			}
-			std::cout << '\n';
+			std::cout << ";\n";
 		}
 	}
 
@@ -362,28 +365,6 @@ private:
 	const size_t _cols;
 	std::vector<double> _storage;
 };
-
-/// @brief Rozdziela zadaną macierz na 4 mniejsze
-/// @brief ich rozmiar jest potęgą 2
-// std::array<Matrix, 4> split_matrix(const Matrix& A) noexcept {
-//	const auto subrows = std::bit_ceil(A.rows()) >> 1;
-//	const auto subcols = std::bit_ceil(A.cols()) >> 1;
-//
-//	std::array<Matrix, 4> result{
-//		Matrix(subrows, subcols),
-//		Matrix(subrows, A.cols() - subcols),
-//		Matrix(A.rows() - subrows, subcols),
-//		Matrix(A.rows() - subrows, A.cols() - subcols),
-//	};
-//
-//	// kopiowanie wartości z A
-//	result[0].set_at({ 0, 0 }, A, { 0, 0 });
-//	result[1].set_at({ 0, 0 }, A, { 0, subcols });
-//	result[2].set_at({ 0, 0 }, A, { subrows, 0 });
-//	result[3].set_at({ 0, 0 }, A, { subrows, subcols });
-//
-//	return result;
-// }
 
 Matrix binet_recursive(const Matrix& A, const Matrix& B) noexcept(!MATRIX_DEBUG) {
 	if (A.rows() == 1 or A.cols() == 1 or B.rows() == 1 or B.cols() == 1) {
@@ -587,26 +568,32 @@ int main() {
 
 	// const size_t N = 256;
 
-	auto mat1 = Matrix::random(10, 10, 0);
+	/*auto mat1 = Matrix::random(10, 10, 0);
 	auto mat2 = Matrix::random(10, 10, 1);
 
 	auto mat_binet = binet_recursive(mat1, mat2);
 	auto mat_strassen = strassen_recursive(mat1, mat2);
+	auto mat_normal = mat1 * mat2;
 
-	std::cout << "[\n";
+	std::cout << "A = [\n";
 	mat1.print();
-	std::cout << "]\n";
-	std::cout << "[\n";
+	std::cout << "];\n";
+	std::cout << "B = [\n";
 	mat2.print();
-	std::cout << "]\n";
-	std::cout << "[\n";
+	std::cout << "];\n";
+	std::cout << "mat_binet = [\n";
 	mat_binet.print();
-	std::cout << "]\n";
-	std::cout << "[\n";
+	std::cout << "];\n";
+	std::cout << "mat_strassen = [\n";
 	mat_strassen.print();
-	std::cout << "]\n";
+	std::cout << "];\n";
+	std::cout << "mat_normal = [\n";
+	mat_normal.print();
+	std::cout << "];\n";
 
-	return 0;
+	return 0;*/
+
+	getchar();
 
 	auto times_binet = std::ofstream("times_binet4.txt");
 	auto times_strassen = std::ofstream("times_strassen4.txt");
