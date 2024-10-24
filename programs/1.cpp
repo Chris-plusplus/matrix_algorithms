@@ -5,6 +5,8 @@
 #include <random>
 #include <stacktrace>
 
+using u32 = uint32_t;
+
 #pragma region operation_counting
 
 #include <array>
@@ -20,7 +22,7 @@ enum class operation {
 	unknown,
 };
 
-size_t counter[(size_t)operation::unknown]{};
+u32 counter[(u32)operation::unknown]{};
 
 void reset() noexcept {
 	for (auto&& v : counter) {
@@ -28,36 +30,36 @@ void reset() noexcept {
 	}
 }
 
-consteval std::array<size_t, 4> parse_operation(std::string_view str) noexcept {
-	std::array<size_t, 4> result{};
+consteval std::array<u32, 4> parse_operation(std::string_view str) noexcept {
+	std::array<u32, 4> result{};
 	for (auto&& c : str) {
 		if (c == '+') {
-			++result[(size_t)operation::add];
+			++result[(u32)operation::add];
 		} else if (c == '-') {
-			++result[(size_t)operation::sub];
+			++result[(u32)operation::sub];
 		} else if (c == '*') {
-			++result[(size_t)operation::mul];
+			++result[(u32)operation::mul];
 		} else if (c == '/') {
-			++result[(size_t)operation::div];
+			++result[(u32)operation::div];
 		}
 	}
 
 	return result;
 }
 
-template<const std::array<size_t, 4> Add, auto Counter = counter>
+template<const std::array<u32, 4> Add, auto Counter = counter>
 void increment_counter() noexcept {
-	if constexpr (Add[(size_t)operation::add]) {
-		Counter[(size_t)operation::add] += Add[(size_t)operation::add];
+	if constexpr (Add[(u32)operation::add]) {
+		Counter[(u32)operation::add] += Add[(u32)operation::add];
 	}
-	if constexpr (Add[(size_t)operation::sub]) {
-		Counter[(size_t)operation::sub] += Add[(size_t)operation::sub];
+	if constexpr (Add[(u32)operation::sub]) {
+		Counter[(u32)operation::sub] += Add[(u32)operation::sub];
 	}
-	if constexpr (Add[(size_t)operation::mul]) {
-		Counter[(size_t)operation::mul] += Add[(size_t)operation::mul];
+	if constexpr (Add[(u32)operation::mul]) {
+		Counter[(u32)operation::mul] += Add[(u32)operation::mul];
 	}
-	if constexpr (Add[(size_t)operation::div]) {
-		Counter[(size_t)operation::div] += Add[(size_t)operation::div];
+	if constexpr (Add[(u32)operation::div]) {
+		Counter[(u32)operation::div] += Add[(u32)operation::div];
 	}
 }
 
@@ -91,7 +93,7 @@ using clk = chr::high_resolution_clock;
 /// @brief Klasa macierzy, dane przechowywane w jednym ciągłym wektorze (cache-friendly)
 class Matrix {
 public:
-	Matrix(size_t rows, size_t cols) noexcept: _rows{ rows }, _cols{ cols }, _storage(_rows * _cols) {}
+	Matrix(u32 rows, u32 cols) noexcept: _rows{ rows }, _cols{ cols }, _storage(_rows * _cols) {}
 
 	auto begin() noexcept { return _storage.begin(); }
 
@@ -118,8 +120,8 @@ public:
 	auto crend() const noexcept { return _storage.crend(); }
 
 	Matrix(std::initializer_list<std::initializer_list<double>> data):
-		_rows{ data.size() },
-		_cols{ data.begin()->size() },
+		_rows{ (u32)data.size() },
+		_cols{ (u32)data.begin()->size() },
 		_storage(_rows * _cols) {
 		auto i = begin();
 		for (auto&& row_list : data) {
@@ -129,11 +131,9 @@ public:
 		}
 	}
 
-	double& operator[](const std::array<size_t, 2> idx) noexcept { return _storage[_cols * idx[0] + idx[1]]; }
+	double& operator[](const std::array<u32, 2> idx) noexcept { return _storage[_cols * idx[0] + idx[1]]; }
 
-	const double& operator[](const std::array<size_t, 2> idx) const noexcept {
-		return _storage[_cols * idx[0] + idx[1]];
-	}
+	const double& operator[](const std::array<u32, 2> idx) const noexcept { return _storage[_cols * idx[0] + idx[1]]; }
 
 	Matrix& operator+=(const Matrix& other) noexcept(!MATRIX_DEBUG) {
 		ASSERT(_rows >= other._rows and _cols >= other._cols);
@@ -149,7 +149,7 @@ public:
 			const auto coldiff = _cols - other._cols;
 			auto i1 = begin();
 			auto i2 = other.begin();
-			for (size_t col2 = 0; i2 != ending; ++i1, ++i2) {
+			for (u32 col2 = 0; i2 != ending; ++i1, ++i2) {
 				auto& v1 = *i1;
 				auto& v2 = *i2;
 				op(v1 += v2);
@@ -190,7 +190,7 @@ public:
 			const auto coldiff = _cols - other._cols;
 			auto i1 = begin();
 			auto i2 = other.begin();
-			for (size_t col2 = 0; i2 != ending; ++i1, ++i2) {
+			for (u32 col2 = 0; i2 != ending; ++i1, ++i2) {
 				auto& v1 = *i1;
 				auto& v2 = *i2;
 				op(v1 -= v2);
@@ -240,21 +240,21 @@ public:
 	/// @param other - macierz z której kopiować
 	/// @param subidx - miejsce skąd kopiować
 	Matrix& set_at(
-		const std::array<size_t, 2> idx,
+		const std::array<u32, 2> idx,
 		const Matrix& other,
-		const std::array<size_t, 2> subidx = { 0, 0 }
+		const std::array<u32, 2> subidx = { 0, 0 }
 	) noexcept {
-		for (size_t row = idx[0]; row < idx[0] + other._rows - subidx[0] && row < _rows; ++row) {
-			for (size_t column = idx[1]; column < idx[1] + other._cols - subidx[1] && column < _cols; ++column) {
+		for (u32 row = idx[0]; row < idx[0] + other._rows - subidx[0] && row < _rows; ++row) {
+			for (u32 column = idx[1]; column < idx[1] + other._cols - subidx[1] && column < _cols; ++column) {
 				(*this)[{ row, column }] = other[{ row - idx[0] + subidx[0], column - idx[1] + subidx[1] }];
 			}
 		}
 		return *this;
 	}
 
-	size_t rows() const noexcept { return _rows; }
+	u32 rows() const noexcept { return _rows; }
 
-	size_t cols() const noexcept { return _cols; }
+	u32 cols() const noexcept { return _cols; }
 
 	/// @brief Generuje losową macierz
 	/// @param rows - liczba wierszy
@@ -264,8 +264,8 @@ public:
 	/// @param b
 	/// @return
 	static Matrix random(
-		size_t rows,
-		size_t cols,
+		u32 rows,
+		u32 cols,
 		std::random_device::result_type seed = 0,
 		double a = 0.00000001,
 		double b = 1.0
@@ -284,8 +284,8 @@ public:
 	}
 
 	void print() const noexcept {
-		for (size_t row = 0; row < _rows; ++row) {
-			for (size_t col = 0; col < _cols; ++col) {
+		for (u32 row = 0; row < _rows; ++row) {
+			for (u32 col = 0; col < _cols; ++col) {
 				std::cout << (*this)[{ row, col }];
 				if (col < _cols - 1) {
 					std::cout << ",\t";
@@ -296,8 +296,8 @@ public:
 	}
 
 	std::array<Matrix, 4> split() const noexcept {
-		const size_t half_rows = _rows / 2;
-		const size_t half_cols = _cols / 2;
+		const u32 half_rows = _rows / 2;
+		const u32 half_cols = _cols / 2;
 
 		std::array<Matrix, 4> result{
 			Matrix(half_rows, half_cols),
@@ -314,12 +314,12 @@ public:
 	}
 
 	std::array<Matrix, 4> split(const bool A) const noexcept {
-		const size_t rows = _rows % 2 == 0 ? _rows : _rows + 1;
-		const size_t cols = _cols % 2 == 0 ? _cols : _cols + 1;
+		const u32 rows = _rows % 2 == 0 ? _rows : _rows + 1;
+		const u32 cols = _cols % 2 == 0 ? _cols : _cols + 1;
 		const bool padding_rows_A = A and _rows % 2;
 		const bool padding_cols_B = not A and _cols % 2;
-		const size_t half_rows = rows / 2;
-		const size_t half_cols = cols / 2;
+		const u32 half_rows = rows / 2;
+		const u32 half_cols = cols / 2;
 
 		std::array<Matrix, 4> result{
 			Matrix(half_rows, half_cols),
@@ -361,8 +361,8 @@ public:
 
 private:
 
-	const size_t _rows;
-	const size_t _cols;
+	const u32 _rows;
+	const u32 _cols;
 	std::vector<double> _storage;
 };
 
@@ -439,11 +439,11 @@ Matrix strassen_recursive(const Matrix& A, const Matrix& B) noexcept(!MATRIX_DEB
 // Matrix binet_recursive2(
 //	const Matrix& A,
 //	const Matrix& B,
-//	const size_t size,
-//	const size_t A_curr_y = 0,
-//	const size_t A_curr_x = 0,
-//	const size_t B_curr_y = 0,
-//	const size_t B_curr_x = 0
+//	const u32 size,
+//	const u32 A_curr_y = 0,
+//	const u32 A_curr_x = 0,
+//	const u32 B_curr_y = 0,
+//	const u32 B_curr_x = 0
 //) noexcept {
 //	ASSERT(A.size() == B.size());
 //	const auto subsize = std::bit_ceil(A.size()) >> 1;
@@ -552,7 +552,7 @@ int main() {
 	ASSERT(mat_normal == mat_binet);
 	ASSERT(mat_normal == mat_strassen);*/
 
-	/*for (size_t i = 2; i != 100 + 1; ++i) {
+	/*for (u32 i = 2; i != 100 + 1; ++i) {
 		auto mat1 = Matrix::random(i, i, 0);
 		auto mat2 = Matrix::random(i, i, 1);
 
@@ -566,7 +566,7 @@ int main() {
 
 	return 0;*/
 
-	// const size_t N = 256;
+	// const u32 N = 256;
 
 	/*auto mat1 = Matrix::random(10, 10, 0);
 	auto mat2 = Matrix::random(10, 10, 1);
@@ -604,7 +604,7 @@ int main() {
 	ops_binet << "N\t+\t-\t*\t/\n";
 	ops_strassen << "N\t+\t-\t*\t/\n";
 
-	for (size_t i = 1; i <= 1'000; i += [i]() {
+	for (u32 i = 1; i <= 1'000; i += [i]() {
 			 if (i < 150) {
 				 return 1;
 			 } else if (i < 250) {
@@ -615,8 +615,8 @@ int main() {
 				 return 100;
 			 }
 		 }()) {
-		const size_t N = i;
-		//(size_t)1 << i;
+		const u32 N = i;
+		//(u32)1 << i;
 
 		std::cout << i << '\n';
 
@@ -643,10 +643,10 @@ int main() {
 			ops_binet << std::format(
 				"{}\t{}\t{}\t{}\t{}\n",
 				N,
-				operation_counting::counter[(size_t)operation_counting::operation::add],
-				operation_counting::counter[(size_t)operation_counting::operation::sub],
-				operation_counting::counter[(size_t)operation_counting::operation::mul],
-				operation_counting::counter[(size_t)operation_counting::operation::div]
+				operation_counting::counter[(u32)operation_counting::operation::add],
+				operation_counting::counter[(u32)operation_counting::operation::sub],
+				operation_counting::counter[(u32)operation_counting::operation::mul],
+				operation_counting::counter[(u32)operation_counting::operation::div]
 			);
 			operation_counting::reset();
 		}
@@ -668,10 +668,10 @@ int main() {
 			ops_strassen << std::format(
 				"{}\t{}\t{}\t{}\t{}\n",
 				N,
-				operation_counting::counter[(size_t)operation_counting::operation::add],
-				operation_counting::counter[(size_t)operation_counting::operation::sub],
-				operation_counting::counter[(size_t)operation_counting::operation::mul],
-				operation_counting::counter[(size_t)operation_counting::operation::div]
+				operation_counting::counter[(u32)operation_counting::operation::add],
+				operation_counting::counter[(u32)operation_counting::operation::sub],
+				operation_counting::counter[(u32)operation_counting::operation::mul],
+				operation_counting::counter[(u32)operation_counting::operation::div]
 			);
 			operation_counting::reset();
 		}
