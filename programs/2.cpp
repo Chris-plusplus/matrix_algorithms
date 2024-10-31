@@ -67,8 +67,8 @@ void increment_counter() noexcept {
 #define op_impl(...) \
 	(operation_counting::increment_counter<operation_counting::parse_operation(#__VA_ARGS__)>(), __VA_ARGS__)
 
-// #define op(...) op_impl(__VA_ARGS__)
-#define op(...) __VA_ARGS__
+#define op(...) op_impl(__VA_ARGS__)
+// #define op(...) __VA_ARGS__
 
 } // namespace operation_counting
 
@@ -470,6 +470,54 @@ std::array<Matrix, 2> LU(const Matrix& A) noexcept(!MATRIX_DEBUG) {
 	return result;
 }
 
+Matrix gauss_elimination_recursive(Matrix A, u32 current_row = 0) {
+	const u32 n = A.rows();
+	if (current_row == n - 1) {
+		return A;
+	}
+
+	// find element with max value in current column
+	u32 max_row = current_row;
+	for (u32 i = current_row + 1; i < n; ++i) {
+		if (std::fabs(A[{i, current_row}]) > std::fabs(A[{max_row, current_row}])) {
+			max_row = i;
+		}
+	}
+	if (max_row != current_row) {
+		// swap rows
+		for (u32 j = 0; j < n; ++j) {
+			std::swap(A[{current_row, j}], A[{max_row, j}]);
+		}
+	}
+
+	// elimination of elements below pivot
+	for (u32 i = current_row + 1; i < n; ++i) {
+		if (A[{i, current_row}] != 0) {
+			double factor = op(A[{i, current_row}] / A[{current_row, current_row}]);
+			for (u32 j = current_row; j < n; ++j) {
+				op(A[{i, j}] -= factor * A[{current_row, j}]);
+			}
+		}
+	}
+
+	return gauss_elimination_recursive(A, current_row + 1);
+}
+
+double determinant_recursive(const Matrix& A) {
+	const u32 n = A.rows();
+	if (n == 1) {
+		return A[{0, 0}];
+	}
+
+	double det = 1.0;
+	Matrix triangular_matrix = gauss_elimination_recursive(A);
+	for (u32 i = 0; i < n; ++i) {
+		op(det *= triangular_matrix[{i, i}]);
+	}
+
+	return det;
+}
+
 constexpr double to_ms =
 	(double)std::ratio_divide<std::nano, std::milli>::num / (double)std::ratio_divide<std::nano, std::milli>::den;
 
@@ -500,16 +548,20 @@ int main() {
 	}
 	return 0;*/
 
-	getchar();
+	//getchar();
 
 	auto times = std::ofstream("times.txt");
 	auto ops_inverse = std::ofstream("ops_inverse.txt");
 	auto ops_LU = std::ofstream("ops_LU.txt");
-	times << "N\tinverse\tLU\n";
+	auto ops_gauss = std::ofstream("ops_gauss.txt");
+	auto ops_det = std::ofstream("ops_det.txt");
+	times << "N\tinverse\tLU\tgauss\tdet\n";
 	ops_inverse << "N\t+\t-\t*\t/\tsum\n";
 	ops_LU << "N\t+\t-\t*\t/\tsum\n";
+	ops_gauss << "N\t+\t-\t*\t/\tsum\n";
+	ops_det << "N\t+\t-\t*\t/\tsum\n";
 
-	for (u32 i = 5; i <= 1'000; i += 5/* [i]() {
+	for (u32 i = 5; i <= 100; i += 5/* [i]() {
 			 if (i < 150) {
 				 return 1;
 			 } else if (i < 250) {
@@ -550,8 +602,44 @@ int main() {
 			auto&& [L, U] = LU(A);
 			auto end = clk::now();
 
-			times << std::format("{}\n", (end - start).count() * to_ms);
+			times << std::format("{}\t", (end - start).count() * to_ms);
 			ops_LU << std::format(
+				"{}\t{}\t{}\t{}\t{}\n",
+				N,
+				operation_counting::counter[(u32)operation_counting::operation::add],
+				operation_counting::counter[(u32)operation_counting::operation::sub],
+				operation_counting::counter[(u32)operation_counting::operation::mul],
+				operation_counting::counter[(u32)operation_counting::operation::div],
+				std::reduce(operation_counting::counter, operation_counting::counter + 4)
+			);
+			operation_counting::reset();
+		}
+		std::cout << i << '\n';
+		{
+			auto start = clk::now();
+			auto&& gauss = gauss_elimination_recursive(A);
+			auto end = clk::now();
+
+			times << std::format("{}\t", (end - start).count() * to_ms);
+			ops_gauss << std::format(
+				"{}\t{}\t{}\t{}\t{}\n",
+				N,
+				operation_counting::counter[(u32)operation_counting::operation::add],
+				operation_counting::counter[(u32)operation_counting::operation::sub],
+				operation_counting::counter[(u32)operation_counting::operation::mul],
+				operation_counting::counter[(u32)operation_counting::operation::div],
+				std::reduce(operation_counting::counter, operation_counting::counter + 4)
+			);
+			operation_counting::reset();
+		}
+		std::cout << i << '\n';
+		{
+			auto start = clk::now();
+			auto&& det = determinant_recursive(A);
+			auto end = clk::now();
+
+			times << std::format("{}\n", (end - start).count() * to_ms);
+			ops_det << std::format(
 				"{}\t{}\t{}\t{}\t{}\n",
 				N,
 				operation_counting::counter[(u32)operation_counting::operation::add],

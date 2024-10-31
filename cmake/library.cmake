@@ -2,7 +2,8 @@ include_guard()
 
 #include("${PROJECT_SOURCE_DIR}/cmake/conan.cmake")
 
-add_library(${PROJECT_NAME})
+add_library(${PROJECT_NAME}
+        ../programs/2.cpp)
 
 # find source files
 file(GLOB_RECURSE MATRIX_SOURCE src/**.cpp)
