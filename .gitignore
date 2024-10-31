@@ -3,6 +3,11 @@ out/
 cmake/conan_files
 build/
 CMakeSettings.json
+
+# CLion project files
+.idea
+cmake-build-*
+
 # Prerequisites
 *.d
 
@@ -35,3 +40,5 @@ CMakeSettings.json
 *.exe
 *.out
 *.app
+
+
