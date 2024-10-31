@@ -41,4 +41,6 @@ cmake-build-*
 *.out
 *.app
 
-
+# Python
+.idea
+__pycache__/
