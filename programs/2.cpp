@@ -399,6 +399,43 @@ private:
 	std::vector<double> _storage;
 };
 
+Matrix strassen_recursive(const Matrix& A, const Matrix& B) noexcept(!MATRIX_DEBUG) {
+	if (A.rows() == 1 or A.cols() == 1 or B.rows() == 1 or B.cols() == 1) {
+		return A * B;
+	}
+
+	auto&& [A_11, A_12, A_21, A_22] = A.split(true);
+	auto&& [B_11, B_12, B_21, B_22] = B.split(false);
+
+	auto M_1 = strassen_recursive(A_11 + A_22, B_11 + B_22);
+	auto M_4 = strassen_recursive(A_22, B_21 - B_11);
+	auto M_5 = strassen_recursive(A_11 + A_12, B_22);
+	auto M_7 = strassen_recursive(A_12 - A_22, B_21 + B_22);
+
+	auto C = Matrix(A.rows(), B.cols());
+	{
+		auto C_11 = M_1 + M_4 - M_5 + M_7;
+		C.set_at({ 0, 0 }, C_11);
+	}
+	auto M_3 = strassen_recursive(A_11, B_12 - B_22);
+	{
+		auto C_12 = M_3 + M_5;
+		C.set_at({ 0, B_11.cols() }, C_12);
+	}
+	auto M_2 = strassen_recursive(A_21 + A_22, B_11);
+	{
+		auto C_21 = M_2 + M_4;
+		C.set_at({ A_11.rows(), 0 }, C_21);
+	}
+	auto M_6 = strassen_recursive(A_21 - A_11, B_11 + B_12);
+	{
+		auto C_22 = M_1 - M_2 + M_3 + M_6;
+		C.set_at({ A_11.rows(), B_11.cols() }, C_22);
+	}
+
+	return C;
+}
+
 Matrix inverse(const Matrix& A) noexcept(!MATRIX_DEBUG) {
 	if (A.rows() == A.cols() and A.rows() == 1) {
 		return Matrix({ { 1.0 / A.at_nocheck({ 0, 0 }) } });
@@ -413,15 +450,20 @@ Matrix inverse(const Matrix& A) noexcept(!MATRIX_DEBUG) {
 	auto&& I11 = Matrix::eye(A11.rows());
 	auto&& I22 = Matrix::eye(A22.rows());
 
-	auto&& M1 = A21 * A11_inv;
+	//auto&& M1 = A21 * A11_inv;
+	auto&& M1 = strassen_recursive(A21, A11_inv);
 
-	auto&& S22 = A22 - M1 * A12;
+	//auto&& S22 = A22 - M1 * A12;
+	auto&& S22 = A22 - strassen_recursive(M1, A12);
 	auto&& S22_inv = inverse(S22);
 
-	auto&& M2 = S22_inv * M1;
+	//auto&& M2 = S22_inv * M1;
+	auto&& M2 = strassen_recursive(S22_inv, M1);
 
-	auto&& B11 = A11_inv * (I11 + A12 * M2);
-	auto&& B12 = -A11_inv * A12 * S22_inv;
+	//auto&& B11 = A11_inv * (I11 + A12 * M2);
+	auto&& B11 = strassen_recursive(A11_inv, I11 + strassen_recursive(A12, M2));
+	//auto&& B12 = -A11_inv * A12 * S22_inv;
+	auto&& B12 = strassen_recursive(strassen_recursive(-A11_inv, A12), S22_inv);
 	auto&& B21 = -M2;
 	auto&& B22 = S22_inv;
 
@@ -445,9 +487,9 @@ std::array<Matrix, 2> LU(const Matrix& A) noexcept(!MATRIX_DEBUG) {
 	auto&& L11_inv = inverse(L11);
 	auto&& U11_inv = inverse(U11);
 
-	auto&& L21 = A21 * U11_inv;
-	auto&& U12 = L11_inv * A12;
-	auto&& S = A22 - L21 * U12;
+	auto&& L21 = strassen_recursive(A21, U11_inv);
+	auto&& U12 = strassen_recursive(L11_inv, A12);
+	auto&& S = A22 - strassen_recursive(L21, U12);
 
 	auto&& [Ls, Us] = LU(S);
 	auto&& L22 = Ls;
@@ -470,51 +512,68 @@ std::array<Matrix, 2> LU(const Matrix& A) noexcept(!MATRIX_DEBUG) {
 	return result;
 }
 
-Matrix gauss_elimination_recursive(Matrix A, u32 current_row = 0) {
-	const u32 n = A.rows();
-	if (current_row == n - 1) {
-		return A;
+Matrix gauss_elimination_recursive(const Matrix& A, const Matrix& b) {
+	u32 N = A.rows();
+
+	if (N != A.cols()) {
+		throw std::invalid_argument("Matrix A must be square.");
 	}
 
-	// find element with max value in current column
-	u32 max_row = current_row;
-	for (u32 i = current_row + 1; i < n; ++i) {
-		if (std::fabs(A[{i, current_row}]) > std::fabs(A[{max_row, current_row}])) {
-			max_row = i;
-		}
-	}
-	if (max_row != current_row) {
-		// swap rows
-		for (u32 j = 0; j < n; ++j) {
-			std::swap(A[{current_row, j}], A[{max_row, j}]);
-		}
+	if (b.rows() != N || b.cols() != 1) {
+		throw std::invalid_argument("Matrix b must have the same number of rows as A and exactly one column.");
 	}
 
-	// elimination of elements below pivot
-	for (u32 i = current_row + 1; i < n; ++i) {
-		if (A[{i, current_row}] != 0) {
-			double factor = op(A[{i, current_row}] / A[{current_row, current_row}]);
-			for (u32 j = current_row; j < n; ++j) {
-				op(A[{i, j}] -= factor * A[{current_row, j}]);
-			}
-		}
+	if (N == 1) {
+		Matrix x(1, 1);
+		x[{0, 0}] = b[{0, 0}] / A[{0, 0}];
+		return x;
 	}
 
-	return gauss_elimination_recursive(A, current_row + 1);
+	auto blocks = A.split();
+	const Matrix& A11 = blocks[0];
+	const Matrix& A12 = blocks[1];
+	const Matrix& A21 = blocks[2];
+	const Matrix& A22 = blocks[3];
+
+	Matrix b1(A11.rows(), 1);
+	Matrix b2(A22.rows(), 1);
+	for (u32 i = 0; i < A11.rows(); ++i) b1[{i, 0}] = b[{i, 0}];
+    for (u32 i = 0; i < A22.rows(); ++i) b2[{i, 0}] = b[{i + A11.rows(), 0}];
+
+    auto [L11, U11] = LU(A11);
+
+	Matrix L11_inv = inverse(L11);
+	Matrix U11_inv = inverse(U11);
+
+	Matrix S = A22 - strassen_recursive(A21, strassen_recursive(U11_inv, strassen_recursive(L11_inv, A12)));
+
+	auto [Ls, Us] = LU(S);
+
+	Matrix RHS1 = strassen_recursive(L11_inv, b1);
+	Matrix RHS2 = strassen_recursive(inverse(Ls), b2 - strassen_recursive(Ls, strassen_recursive(A21, strassen_recursive(U11_inv, RHS1))));
+
+	Matrix x2 = gauss_elimination_recursive(Us, RHS2);
+
+	Matrix x1 = strassen_recursive(U11_inv, RHS1 - strassen_recursive(A12, x2));
+
+	Matrix x(N, 1);
+	for (u32 i = 0; i < x1.rows(); ++i) x[{i, 0}] = x1[{i, 0}];
+    for (u32 i = 0; i < x2.rows(); ++i) x[{i + x1.rows(), 0}] = x2[{i, 0}];
+
+    return x;
 }
 
 double determinant_recursive(const Matrix& A) {
-	const u32 n = A.rows();
-	if (n == 1) {
-		return A[{0, 0}];
-	}
+	const u32 N = A.rows();
+
+	if (N != A.cols()) throw std::runtime_error("Only square matrices have a determinant");
+
+    auto [L, U] = LU(A);
 
 	double det = 1.0;
-	Matrix triangular_matrix = gauss_elimination_recursive(A);
-	for (u32 i = 0; i < n; ++i) {
-		op(det *= triangular_matrix[{i, i}]);
+	for (u32 i = 0; i < N; ++i) {
+		det *= U[{i, i}];
 	}
-
 	return det;
 }
 
@@ -575,6 +634,7 @@ int main() {
 		const u32 N = i;
 
 		auto&& A = Matrix::random(N, N, 0);
+		auto&& b = Matrix::random(N, 1, 0);
 
 		times << std::format("{}\t", N);
 
@@ -617,7 +677,7 @@ int main() {
 		std::cout << i << '\n';
 		{
 			auto start = clk::now();
-			auto&& gauss = gauss_elimination_recursive(A);
+			auto&& gauss = gauss_elimination_recursive(A, b);
 			auto end = clk::now();
 
 			times << std::format("{}\t", (end - start).count() * to_ms);
