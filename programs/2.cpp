@@ -438,7 +438,7 @@ Matrix smul(const Matrix& A, const Matrix& B) noexcept(!MATRIX_DEBUG) {
 
 Matrix inverse(const Matrix& A) noexcept(!MATRIX_DEBUG) {
 	if (A.rows() == A.cols() and A.rows() == 1) {
-		return Matrix({ { 1.0 / A.at_nocheck({ 0, 0 }) } });
+		return op(Matrix({ { 1.0 / A.at_nocheck({ 0, 0 }) } }));
 	}
 
 	auto&& B = Matrix(A.rows(), A.cols());
@@ -450,19 +450,19 @@ Matrix inverse(const Matrix& A) noexcept(!MATRIX_DEBUG) {
 	auto&& I11 = Matrix::eye(A11.rows());
 	auto&& I22 = Matrix::eye(A22.rows());
 
-	//auto&& M1 = A21 * A11_inv;
+	// auto&& M1 = A21 * A11_inv;
 	auto&& M1 = smul(A21, A11_inv);
 
-	//auto&& S22 = A22 - M1 * A12;
+	// auto&& S22 = A22 - M1 * A12;
 	auto&& S22 = A22 - smul(M1, A12);
 	auto&& S22_inv = inverse(S22);
 
-	//auto&& M2 = S22_inv * M1;
+	// auto&& M2 = S22_inv * M1;
 	auto&& M2 = smul(S22_inv, M1);
 
-	//auto&& B11 = A11_inv * (I11 + A12 * M2);
+	// auto&& B11 = A11_inv * (I11 + A12 * M2);
 	auto&& B11 = smul(A11_inv, I11 + smul(A12, M2));
-	//auto&& B12 = -A11_inv * A12 * S22_inv;
+	// auto&& B12 = -A11_inv * A12 * S22_inv;
 	auto&& B12 = smul(smul(-A11_inv, A12), S22_inv);
 	auto&& B21 = -M2;
 	auto&& B22 = S22_inv;
@@ -512,20 +512,20 @@ std::array<Matrix, 2> LU(const Matrix& A) noexcept(!MATRIX_DEBUG) {
 	return result;
 }
 
-Matrix gauss_elimination_recursive(const Matrix& A, const Matrix& b) {
-	u32 N = A.rows();
+Matrix gauss_elimination_recursive(const Matrix& A, const Matrix& b) noexcept(!MATRIX_DEBUG) {
+	const u32 N = A.rows();
 
-	if (N != A.cols()) {
+	/*if (N != A.cols()) {
 		throw std::invalid_argument("Matrix A must be square.");
 	}
 
 	if (b.rows() != N || b.cols() != 1) {
 		throw std::invalid_argument("Matrix b must have the same number of rows as A and exactly one column.");
-	}
+	}*/
 
 	if (N == 1) {
 		Matrix x(1, 1);
-		x[{0, 0}] = b[{0, 0}] / A[{0, 0}];
+		op(x[{ 0, 0 }] = b[{ 0, 0 }] / A[{ 0, 0 }]);
 		return x;
 	}
 
@@ -537,10 +537,14 @@ Matrix gauss_elimination_recursive(const Matrix& A, const Matrix& b) {
 
 	Matrix b1(A11.rows(), 1);
 	Matrix b2(A22.rows(), 1);
-	for (u32 i = 0; i < A11.rows(); ++i) b1[{i, 0}] = b[{i, 0}];
-    for (u32 i = 0; i < A22.rows(); ++i) b2[{i, 0}] = b[{i + A11.rows(), 0}];
+	for (u32 i = 0; i < A11.rows(); ++i) {
+		b1[{ i, 0 }] = b[{ i, 0 }];
+	}
+	for (u32 i = 0; i < A22.rows(); ++i) {
+		b2[{ i, 0 }] = b[{ i + A11.rows(), 0 }];
+	}
 
-    auto&& [L11, U11] = LU(A11);
+	auto&& [L11, U11] = LU(A11);
 
 	Matrix L11_inv = inverse(L11);
 	Matrix U11_inv = inverse(U11);
@@ -564,22 +568,24 @@ Matrix gauss_elimination_recursive(const Matrix& A, const Matrix& b) {
 	result.set_at({ 0, A11.cols() }, C12);
 	result.set_at({ A11.rows(), 0 }, C21);
 	result.set_at({ A11.rows(), A11.cols() }, C22);
-	result.set_at({ 0, A11.cols() + A12.cols()}, RHS1);
-	result.set_at({ A11.rows(), A11.cols() + A12.cols()}, RHS2);
+	result.set_at({ 0, A11.cols() + A12.cols() }, RHS1);
+	result.set_at({ A11.rows(), A11.cols() + A12.cols() }, RHS2);
 
 	return result;
 }
 
-double determinant_recursive(const Matrix& A) {
+double determinant_recursive(const Matrix& A) noexcept(!MATRIX_DEBUG) {
 	const u32 N = A.rows();
 
-	if (N != A.cols()) throw std::runtime_error("Only square matrices have a determinant");
+	/*if (N != A.cols()) {
+		throw std::runtime_error("Only square matrices have a determinant");
+	}*/
 
-    auto [L, U] = LU(A);
+	auto [L, U] = LU(A);
 
 	double det = 1.0;
 	for (u32 i = 0; i < N; ++i) {
-		det *= L[{i, i}] * U[{i, i}];
+		det *= L[{ i, i }] * U[{ i, i }];
 	}
 	return det;
 }
@@ -587,7 +593,7 @@ double determinant_recursive(const Matrix& A) {
 constexpr double to_ms =
 	(double)std::ratio_divide<std::nano, std::milli>::num / (double)std::ratio_divide<std::nano, std::milli>::den;
 
-int main() {
+int main() noexcept(!MATRIX_DEBUG) {
 	/*auto A = Matrix({ { 4 } });
 	auto B = Matrix({
 		{ 1, 2 },
@@ -614,7 +620,7 @@ int main() {
 	}
 	return 0;*/
 
-	//getchar();
+	// getchar();
 
 	auto times = std::ofstream("times.txt");
 	auto ops_inverse = std::ofstream("ops_inverse.txt");
@@ -627,7 +633,7 @@ int main() {
 	ops_gauss << "N\t+\t-\t*\t/\tsum\n";
 	ops_det << "N\t+\t-\t*\t/\tsum\n";
 
-	for (u32 i = 5; i <= 20; i += 5/* [i]() {
+	for (u32 i = 5; i <= 500; i += 5/* [i]() {
 			 if (i < 150) {
 				 return 1;
 			 } else if (i < 250) {
