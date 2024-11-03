@@ -399,7 +399,7 @@ private:
 	std::vector<double> _storage;
 };
 
-Matrix strassen_recursive(const Matrix& A, const Matrix& B) noexcept(!MATRIX_DEBUG) {
+Matrix smul(const Matrix& A, const Matrix& B) noexcept(!MATRIX_DEBUG) {
 	if (A.rows() == 1 or A.cols() == 1 or B.rows() == 1 or B.cols() == 1) {
 		return A * B;
 	}
