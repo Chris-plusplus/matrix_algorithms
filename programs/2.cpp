@@ -407,27 +407,27 @@ Matrix strassen_recursive(const Matrix& A, const Matrix& B) noexcept(!MATRIX_DEB
 	auto&& [A_11, A_12, A_21, A_22] = A.split(true);
 	auto&& [B_11, B_12, B_21, B_22] = B.split(false);
 
-	auto M_1 = strassen_recursive(A_11 + A_22, B_11 + B_22);
-	auto M_4 = strassen_recursive(A_22, B_21 - B_11);
-	auto M_5 = strassen_recursive(A_11 + A_12, B_22);
-	auto M_7 = strassen_recursive(A_12 - A_22, B_21 + B_22);
+	auto M_1 = smul(A_11 + A_22, B_11 + B_22);
+	auto M_4 = smul(A_22, B_21 - B_11);
+	auto M_5 = smul(A_11 + A_12, B_22);
+	auto M_7 = smul(A_12 - A_22, B_21 + B_22);
 
 	auto C = Matrix(A.rows(), B.cols());
 	{
 		auto C_11 = M_1 + M_4 - M_5 + M_7;
 		C.set_at({ 0, 0 }, C_11);
 	}
-	auto M_3 = strassen_recursive(A_11, B_12 - B_22);
+	auto M_3 = smul(A_11, B_12 - B_22);
 	{
 		auto C_12 = M_3 + M_5;
 		C.set_at({ 0, B_11.cols() }, C_12);
 	}
-	auto M_2 = strassen_recursive(A_21 + A_22, B_11);
+	auto M_2 = smul(A_21 + A_22, B_11);
 	{
 		auto C_21 = M_2 + M_4;
 		C.set_at({ A_11.rows(), 0 }, C_21);
 	}
-	auto M_6 = strassen_recursive(A_21 - A_11, B_11 + B_12);
+	auto M_6 = smul(A_21 - A_11, B_11 + B_12);
 	{
 		auto C_22 = M_1 - M_2 + M_3 + M_6;
 		C.set_at({ A_11.rows(), B_11.cols() }, C_22);
@@ -451,19 +451,19 @@ Matrix inverse(const Matrix& A) noexcept(!MATRIX_DEBUG) {
 	auto&& I22 = Matrix::eye(A22.rows());
 
 	//auto&& M1 = A21 * A11_inv;
-	auto&& M1 = strassen_recursive(A21, A11_inv);
+	auto&& M1 = smul(A21, A11_inv);
 
 	//auto&& S22 = A22 - M1 * A12;
-	auto&& S22 = A22 - strassen_recursive(M1, A12);
+	auto&& S22 = A22 - smul(M1, A12);
 	auto&& S22_inv = inverse(S22);
 
 	//auto&& M2 = S22_inv * M1;
-	auto&& M2 = strassen_recursive(S22_inv, M1);
+	auto&& M2 = smul(S22_inv, M1);
 
 	//auto&& B11 = A11_inv * (I11 + A12 * M2);
-	auto&& B11 = strassen_recursive(A11_inv, I11 + strassen_recursive(A12, M2));
+	auto&& B11 = smul(A11_inv, I11 + smul(A12, M2));
 	//auto&& B12 = -A11_inv * A12 * S22_inv;
-	auto&& B12 = strassen_recursive(strassen_recursive(-A11_inv, A12), S22_inv);
+	auto&& B12 = smul(smul(-A11_inv, A12), S22_inv);
 	auto&& B21 = -M2;
 	auto&& B22 = S22_inv;
 
@@ -487,9 +487,9 @@ std::array<Matrix, 2> LU(const Matrix& A) noexcept(!MATRIX_DEBUG) {
 	auto&& L11_inv = inverse(L11);
 	auto&& U11_inv = inverse(U11);
 
-	auto&& L21 = strassen_recursive(A21, U11_inv);
-	auto&& U12 = strassen_recursive(L11_inv, A12);
-	auto&& S = A22 - strassen_recursive(L21, U12);
+	auto&& L21 = smul(A21, U11_inv);
+	auto&& U12 = smul(L11_inv, A12);
+	auto&& S = A22 - smul(L21, U12);
 
 	auto&& [Ls, Us] = LU(S);
 	auto&& L22 = Ls;
@@ -529,7 +529,7 @@ Matrix gauss_elimination_recursive(const Matrix& A, const Matrix& b) {
 		return x;
 	}
 
-	auto blocks = A.split();
+	auto&& blocks = A.split();
 	const Matrix& A11 = blocks[0];
 	const Matrix& A12 = blocks[1];
 	const Matrix& A21 = blocks[2];
@@ -540,27 +540,34 @@ Matrix gauss_elimination_recursive(const Matrix& A, const Matrix& b) {
 	for (u32 i = 0; i < A11.rows(); ++i) b1[{i, 0}] = b[{i, 0}];
     for (u32 i = 0; i < A22.rows(); ++i) b2[{i, 0}] = b[{i + A11.rows(), 0}];
 
-    auto [L11, U11] = LU(A11);
+    auto&& [L11, U11] = LU(A11);
 
 	Matrix L11_inv = inverse(L11);
 	Matrix U11_inv = inverse(U11);
 
-	Matrix S = A22 - strassen_recursive(A21, strassen_recursive(U11_inv, strassen_recursive(L11_inv, A12)));
+	Matrix S = A22 - smul(A21, smul(U11_inv, smul(L11_inv, A12)));
 
-	auto [Ls, Us] = LU(S);
+	auto&& [Ls, Us] = LU(S);
+	auto&& Ls_inv = inverse(Ls);
 
-	Matrix RHS1 = strassen_recursive(L11_inv, b1);
-	Matrix RHS2 = strassen_recursive(inverse(Ls), b2 - strassen_recursive(Ls, strassen_recursive(A21, strassen_recursive(U11_inv, RHS1))));
+	auto&& C11 = U11;
+	auto&& C12 = smul(L11_inv, A12);
+	auto&& C21 = Matrix(A21.rows(), A21.cols());
+	auto&& C22 = Us;
 
-	Matrix x2 = gauss_elimination_recursive(Us, RHS2);
+	Matrix RHS1 = smul(L11_inv, b1);
+	Matrix RHS2 = smul(Ls_inv, b2 - smul(Ls, smul(A21, smul(U11_inv, RHS1))));
 
-	Matrix x1 = strassen_recursive(U11_inv, RHS1 - strassen_recursive(A12, x2));
+	auto&& result = Matrix(A.rows(), A.cols() + 1);
 
-	Matrix x(N, 1);
-	for (u32 i = 0; i < x1.rows(); ++i) x[{i, 0}] = x1[{i, 0}];
-    for (u32 i = 0; i < x2.rows(); ++i) x[{i + x1.rows(), 0}] = x2[{i, 0}];
+	result.set_at({ 0, 0 }, C11);
+	result.set_at({ 0, A11.cols() }, C12);
+	result.set_at({ A11.rows(), 0 }, C21);
+	result.set_at({ A11.rows(), A11.cols() }, C22);
+	result.set_at({ 0, A11.cols() + A12.cols()}, RHS1);
+	result.set_at({ A11.rows(), A11.cols() + A12.cols()}, RHS2);
 
-    return x;
+	return result;
 }
 
 double determinant_recursive(const Matrix& A) {
@@ -572,7 +579,7 @@ double determinant_recursive(const Matrix& A) {
 
 	double det = 1.0;
 	for (u32 i = 0; i < N; ++i) {
-		det *= U[{i, i}];
+		det *= L[{i, i}] * U[{i, i}];
 	}
 	return det;
 }
@@ -620,7 +627,7 @@ int main() {
 	ops_gauss << "N\t+\t-\t*\t/\tsum\n";
 	ops_det << "N\t+\t-\t*\t/\tsum\n";
 
-	for (u32 i = 5; i <= 100; i += 5/* [i]() {
+	for (u32 i = 5; i <= 20; i += 5/* [i]() {
 			 if (i < 150) {
 				 return 1;
 			 } else if (i < 250) {
