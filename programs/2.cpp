@@ -549,14 +549,16 @@ Matrix gauss_elimination_recursive(const Matrix& A, const Matrix& b) noexcept(!M
 	Matrix L11_inv = inverse(L11);
 	Matrix U11_inv = inverse(U11);
 
-	Matrix S = A22 - smul(A21, smul(U11_inv, smul(L11_inv, A12)));
+	auto temp1 = smul(L11_inv, A12);
+
+	Matrix S = A22 - smul(A21, smul(U11_inv, temp1));
 
 	auto&& [Ls, Us] = LU(S);
 	auto&& Ls_inv = inverse(Ls);
 
 	auto&& C11 = U11;
-	auto&& C12 = smul(L11_inv, A12);
-	auto&& C21 = Matrix(A21.rows(), A21.cols());
+	auto& C12 = temp1;
+	// auto&& C21 = Matrix(A21.rows(), A21.cols());
 	auto&& C22 = Us;
 
 	Matrix RHS1 = smul(L11_inv, b1);
@@ -566,7 +568,7 @@ Matrix gauss_elimination_recursive(const Matrix& A, const Matrix& b) noexcept(!M
 
 	result.set_at({ 0, 0 }, C11);
 	result.set_at({ 0, A11.cols() }, C12);
-	result.set_at({ A11.rows(), 0 }, C21);
+	// result.set_at({ A11.rows(), 0 }, C21);
 	result.set_at({ A11.rows(), A11.cols() }, C22);
 	result.set_at({ 0, A11.cols() + A12.cols() }, RHS1);
 	result.set_at({ A11.rows(), A11.cols() + A12.cols() }, RHS2);
@@ -585,7 +587,7 @@ double determinant_recursive(const Matrix& A) noexcept(!MATRIX_DEBUG) {
 
 	double det = 1.0;
 	for (u32 i = 0; i < N; ++i) {
-		det *= L[{ i, i }] * U[{ i, i }];
+		op(det *= L[{ i, i }] * U[{ i, i }]);
 	}
 	return det;
 }
@@ -609,6 +611,14 @@ int main() noexcept(!MATRIX_DEBUG) {
 	L.print();
 	U.print();*/
 
+	auto&& A = Matrix::random(10, 10, 0);
+	auto&& b = Matrix::random(10, 1, 0);
+
+	auto gauss_result = gauss_elimination_recursive(A, b);
+	gauss_result.print();
+
+	return 0;
+
 	/*for (u32 i = 1; i <= 100; ++i) {
 		auto&& mat = Matrix::random(i, i, 0);
 
@@ -620,7 +630,7 @@ int main() noexcept(!MATRIX_DEBUG) {
 	}
 	return 0;*/
 
-	// getchar();
+	getchar();
 
 	auto times = std::ofstream("times.txt");
 	auto ops_inverse = std::ofstream("ops_inverse.txt");

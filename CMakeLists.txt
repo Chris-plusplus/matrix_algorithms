@@ -20,7 +20,7 @@ include("cmake/defines.cmake")
 #set(MATRIX_FORCE_CONAN_INSTALL TRUE)
 #include("cmake/conan.cmake")
 
-include("cmake/library.cmake")
+#include("cmake/library.cmake")
 
 # CMake targets
 file(GLOB_RECURSE MATRIX_TARGETS cmake/targets/*.cmake)
