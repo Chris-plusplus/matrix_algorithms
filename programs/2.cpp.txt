@@ -399,7 +399,7 @@ private:
 	std::vector<double> _storage;
 };
 
-Matrix _smul(const Matrix& A, const Matrix& B) noexcept(!MATRIX_DEBUG) {
+Matrix smul(const Matrix& A, const Matrix& B) noexcept(!MATRIX_DEBUG) {
 	if (A.rows() == 1 or A.cols() == 1 or B.rows() == 1 or B.cols() == 1) {
 		return A * B;
 	}
@@ -407,27 +407,27 @@ Matrix _smul(const Matrix& A, const Matrix& B) noexcept(!MATRIX_DEBUG) {
 	auto&& [A_11, A_12, A_21, A_22] = A.split(true);
 	auto&& [B_11, B_12, B_21, B_22] = B.split(false);
 
-	auto M_1 = _smul(A_11 + A_22, B_11 + B_22);
-	auto M_4 = _smul(A_22, B_21 - B_11);
-	auto M_5 = _smul(A_11 + A_12, B_22);
-	auto M_7 = _smul(A_12 - A_22, B_21 + B_22);
+	auto M_1 = smul(A_11 + A_22, B_11 + B_22);
+	auto M_4 = smul(A_22, B_21 - B_11);
+	auto M_5 = smul(A_11 + A_12, B_22);
+	auto M_7 = smul(A_12 - A_22, B_21 + B_22);
 
 	auto C = Matrix(A.rows(), B.cols());
 	{
 		auto C_11 = M_1 + M_4 - M_5 + M_7;
 		C.set_at({ 0, 0 }, C_11);
 	}
-	auto M_3 = _smul(A_11, B_12 - B_22);
+	auto M_3 = smul(A_11, B_12 - B_22);
 	{
 		auto C_12 = M_3 + M_5;
 		C.set_at({ 0, B_11.cols() }, C_12);
 	}
-	auto M_2 = _smul(A_21 + A_22, B_11);
+	auto M_2 = smul(A_21 + A_22, B_11);
 	{
 		auto C_21 = M_2 + M_4;
 		C.set_at({ A_11.rows(), 0 }, C_21);
 	}
-	auto M_6 = _smul(A_21 - A_11, B_11 + B_12);
+	auto M_6 = smul(A_21 - A_11, B_11 + B_12);
 	{
 		auto C_22 = M_1 - M_2 + M_3 + M_6;
 		C.set_at({ A_11.rows(), B_11.cols() }, C_22);
@@ -435,12 +435,6 @@ Matrix _smul(const Matrix& A, const Matrix& B) noexcept(!MATRIX_DEBUG) {
 
 	return C;
 }
-
-Matrix normal_mul(const Matrix& A, const Matrix& B) noexcept {
-	return A * B;
-}
-
-Matrix (*smul)(const Matrix&, const Matrix&) noexcept = normal_mul;
 
 Matrix inverse(const Matrix& A) noexcept(!MATRIX_DEBUG) {
 	if (A.rows() == A.cols() and A.rows() == 1) {
