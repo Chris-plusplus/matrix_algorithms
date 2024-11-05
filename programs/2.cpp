@@ -562,7 +562,7 @@ Matrix gauss_elimination_recursive(const Matrix& A, const Matrix& b) noexcept(!M
 	auto&& C22 = Us;
 
 	Matrix RHS1 = smul(L11_inv, b1);
-	Matrix RHS2 = smul(Ls_inv, b2 - smul(Ls, smul(A21, smul(U11_inv, RHS1))));
+	Matrix RHS2 = smul(Ls_inv, b2) - smul(Ls_inv, smul(A21, smul(U11_inv, RHS1)));
 
 	auto&& result = Matrix(A.rows(), A.cols() + 1);
 
