@@ -5,7 +5,7 @@ class MATRIX(ConanFile):
     settings = "build_type"
 
     def requirements(self):
-        pass
+        self.requires("eigen/3.4.0")
 
     def configure(self):
         pass

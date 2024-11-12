@@ -18,9 +18,9 @@ include("cmake/defines.cmake")
 
 # uncomment below to force conan reinstallation
 #set(MATRIX_FORCE_CONAN_INSTALL TRUE)
-#include("cmake/conan.cmake")
+include("cmake/conan.cmake")
 
-#include("cmake/library.cmake")
+include("cmake/library.cmake")
 
 # CMake targets
 file(GLOB_RECURSE MATRIX_TARGETS cmake/targets/*.cmake)
