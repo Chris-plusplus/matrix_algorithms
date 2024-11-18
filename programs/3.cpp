@@ -4,6 +4,7 @@
 #include <format>
 #include <iostream>
 #include <memory>
+#include <opencv2/opencv.hpp>
 
 namespace eg = Eigen;
 
@@ -20,7 +21,7 @@ public:
 		const u64 s_max,
 		const u64 r,
 		const double epsilon
-	) noexcept(!MATRIX_DEBUG) {
+	) {
 		eg::MatrixXd A_block = A.block(t_min, s_min, t_max - t_min, s_max - s_min);
 		/*if (A_block.rows() == 0 || A_block.cols() == 0) {
 			sons = nullptr;
@@ -121,6 +122,64 @@ Eigen::MatrixXd generateRandomMatrix(int N, double min, double max) {
 	random_matrix = (max - min) * random_matrix + Eigen::MatrixXd::Constant(N, N, min); // Scale to [min, max]
 
 	return random_matrix;
+}
+
+std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd> loadImageAsMatrices(const std::string& imagePath) {
+	cv::Mat img = cv::imread(imagePath);
+	if (img.empty()) {
+		throw std::runtime_error("Image not found!");
+	}
+
+	cv::Mat imgFloat;
+	img.convertTo(imgFloat, CV_64F);
+
+	int rows = img.rows, cols = img.cols;
+	Eigen::MatrixXd R(rows, cols), G(rows, cols), B(rows, cols);
+
+	for (int i = 0; i < rows; ++i) {
+		for (int j = 0; j < cols; ++j) {
+			cv::Vec3b intensity = img.at<cv::Vec3b>(i, j);
+			R(i, j) = intensity[2]; // OpenCV uses BGR
+			G(i, j) = intensity[1];
+			B(i, j) = intensity[0];
+		}
+	}
+
+	return {R, G, B};
+}
+
+void drawMatrix(const Eigen::MatrixXd& M, const std::string& outputPath) {
+	Eigen::MatrixXd normalized = M;
+	normalized = (normalized - normalized.minCoeff()) / (normalized.maxCoeff() - normalized.minCoeff()) * 255.0;
+
+	cv::Mat img(M.rows(), M.cols(), CV_8UC1);
+	for (int i = 0; i < M.rows(); ++i) {
+		for (int j = 0; j < M.cols(); ++j) {
+			img.at<uchar>(i, j) = static_cast<uchar>(normalized(i, j));
+		}
+	}
+
+	cv::imwrite(outputPath, img);
+}
+
+void drawBitmap(
+	const Eigen::MatrixXd& R,
+	const Eigen::MatrixXd& G,
+	const Eigen::MatrixXd& B,
+	const std::string& outputPath) {
+
+	int rows = R.rows(), cols = R.cols();
+	cv::Mat img(rows, cols, CV_8UC3);
+
+	for (int i = 0; i < rows; ++i) {
+		for (int j = 0; j < cols; ++j) {
+			img.at<cv::Vec3b>(i, j)[2] = static_cast<uchar>(R(i, j));
+			img.at<cv::Vec3b>(i, j)[1] = static_cast<uchar>(G(i, j));
+			img.at<cv::Vec3b>(i, j)[0] = static_cast<uchar>(B(i, j));
+		}
+	}
+
+	cv::imwrite(outputPath, img);
 }
 
 int main() {
