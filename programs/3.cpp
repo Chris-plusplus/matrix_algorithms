@@ -60,6 +60,19 @@ struct MatrixCompressor {
 		}
 	}
 
+	u64 bytes() const noexcept {
+		return sizeof(*this) + U.size() * sizeof(double) + V.size() * sizeof(double) +
+			singularvalues.size() * sizeof(double) + [this]() {
+				u64 sons_sum = 0;
+				if (sons) {
+					for (u32 i = 0; i != 4; ++i) {
+						sons_sum += sons[i].bytes();
+					}
+				}
+				return sons_sum;
+			}();
+	}
+
 	eg::MatrixXd& decompress(eg::MatrixXd& dest) const noexcept {
 		if (not sons) {
 			eg::MatrixXd sigma = eg::MatrixXd::Zero(singularvalues.size(), singularvalues.size());
@@ -301,6 +314,12 @@ int main() {
 		compressed_R.decompress(decompressed_R);
 		compressed_G.decompress(decompressed_G);
 		compressed_B.decompress(decompressed_B);
+
+		std::cout << std::format(
+			"RGB = {}\ncompressed_RGB = {}\n",
+			3 * (R.size() * sizeof(double) + sizeof(R)),
+			compressed_R.bytes() + compressed_G.bytes() + compressed_B.bytes()
+		);
 
 		saveMToBMP(decompressed_R, "R", std::format("results/manual_R.bmp"));
 		saveMToBMP(decompressed_G, "G", std::format("results/manual_G.bmp"));
