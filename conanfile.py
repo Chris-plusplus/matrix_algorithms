@@ -1,5 +1,4 @@
 from conan import ConanFile
-from conan.tools.cmake import cmake_layout
 
 
 class MATRIX(ConanFile):
@@ -13,8 +12,5 @@ class MATRIX(ConanFile):
 
     def configure(self):
         pass
-
-    def layout(self):
-        cmake_layout(self)
 
     generators = "CMakeDeps", "CMakeToolchain"
