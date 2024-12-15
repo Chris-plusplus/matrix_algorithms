@@ -1,6 +1,6 @@
-#include "RandomizedSVD.hpp"
 #include <Eigen/Dense>
 #include <array>
+#include <filesystem>
 #include <format>
 #include <fstream>
 #include <future>
@@ -10,78 +10,52 @@
 #include <ranges>
 
 namespace eg = Eigen;
+namespace fs = std::filesystem;
+using namespace std::string_literals;
+using namespace std::string_view_literals;
 
 using u64 = size_t;
+using u32 = uint32_t;
 
 struct MatrixCompressor {
 	MatrixCompressor(
 		const eg::MatrixXd& A,
-		const u64 t_min,
-		const u64 t_max,
-		const u64 s_min,
-		const u64 s_max,
-		const u64 r,
+		const u32 row_min,
+		const u32 row_max,
+		const u32 col_min,
+		const u32 col_max,
+		const u32 rank,
 		const double epsilon
 	) {
-		eg::MatrixXd A_block = A.block(t_min, s_min, t_max - t_min, s_max - s_min);
-		/*if (A_block.rows() == 0 || A_block.cols() == 0) {
-			sons = nullptr;
-			singularvalues = eg::VectorXd::Zero(0);
-			return;
-		}*/
-		// RandomizedSvd SVD;
+		eg::MatrixXd A_block = A.block(row_min, col_min, row_max - row_min, col_max - col_min);
 
 		eg::MatrixXd D;
 
 		eg::VectorXd singVal;
 
 		if (A_block.size() != 0) {
-			auto SVD = eg::BDCSVD<eg::MatrixXd>(A_block, eg::ComputeThinU | eg::ComputeThinV);
+			auto SVD = eg::BDCSVD(A_block, eg::ComputeThinU | eg::ComputeThinV);
 			singVal = SVD.singularValues();
-			D = SVD.singularValues().head(r).asDiagonal();
-			U = SVD.matrixU().leftCols(r);
-			V = SVD.matrixV().leftCols(r).transpose();
+			D = SVD.singularValues().head(std::min(rank, (u32)SVD.singularValues().size())).asDiagonal();
+			U = SVD.matrixU().leftCols(std::min(rank, (u32)SVD.matrixU().cols()));
+			V = SVD.matrixV().leftCols(std::min(rank, (u32)SVD.matrixV().cols())).transpose();
 		}
 
-		/*std::cout << "U:\n" << U << '\n';
-		std::cout << "D:\n" << D << '\n';
-		std::cout << "V:\n" << V << '\n';
-		std::cout << "row_max = " << t_max << '\n';
-		std::cout << "row_min = " << t_min << '\n';
-		std::cout << '\n';
-
-		std::cout << U * D * V << '\n';*/
-
-		if (t_max == t_min + r or singVal.size() < r or singVal[r - 1] < epsilon) {
+		if (row_max == row_min + rank or singVal.size() < rank or singVal[rank - 1] < epsilon) {
 			sons = nullptr;
 			singularvalues = D.diagonal();
-			size = { t_min, t_max, s_min, s_max };
-
-			/*if (A_block.isZero()) {
-				rank = 0;
-				size = { t_min, t_max, s_min, s_max };
-			} else {
-				auto sigma = D.diagonal();
-				auto rank = r;
-
-				this->rank = rank;
-				singularvalues = sigma.head(rank);
-				U = U.leftCols(rank);
-				V = D.block(0, 0, rank, rank) * V.topRows(rank);
-				sons = nullptr;
-				size = { t_min, t_max, s_min, s_max };
-			}*/
+			size = { row_min, row_max, col_min, col_max };
 		} else {
-			auto t_newmax = (t_min + t_max) / 2;
-			auto s_newmax = (s_min + s_max) / 2;
+			auto row_newmax = (row_min + row_max) / 2;
+			auto col_newmax = (col_min + col_max) / 2;
 
-			size = { t_min, t_max, s_min, s_max };
+			size = { row_min, row_max, col_min, col_max };
 
 			sons = std::unique_ptr<MatrixCompressor[]>(new MatrixCompressor[4]{
-				{ A,	 t_min, t_newmax,	  s_min, s_newmax, r, epsilon },
-				{ A,	 t_min, t_newmax, s_newmax,	s_max, r, epsilon },
-				{ A, t_newmax,	   t_max,	  s_min, s_newmax, r, epsilon },
-				{ A, t_newmax,	   t_max, s_newmax,	s_max, r, epsilon },
+				{ A,	 row_min, row_newmax,	  col_min, col_newmax, rank, epsilon },
+				{ A,	 row_min, row_newmax, col_newmax,	  col_max, rank, epsilon },
+				{ A, row_newmax,	 row_max,	  col_min, col_newmax, rank, epsilon },
+				{ A, row_newmax,	 row_max, col_newmax,	  col_max, rank, epsilon },
 			});
 		}
 	}
@@ -91,15 +65,11 @@ struct MatrixCompressor {
 			eg::MatrixXd sigma = eg::MatrixXd::Zero(singularvalues.size(), singularvalues.size());
 			sigma.diagonal() = singularvalues;
 
-			// auto Usigma = U * sigma;
-
-			// std::cout << std::format("{}, {} | {}, {}\n", Usigma.rows(), Usigma.cols(), V.rows(), V.cols());
-
 			if (size[0] != size[1] and size[2] != size[3]) {
-				dest.block(size[0], size[2], size[1] - size[0], size[3] - size[2]) = (U * sigma * V);
+				dest.block(size[0], size[2], size[1] - size[0], size[3] - size[2]) = U * sigma * V;
 			}
 		} else {
-			for (u64 i = 0; i != 4; ++i) {
+			for (u32 i = 0; i != 4; ++i) {
 				sons[i].decompress(dest);
 			}
 		}
@@ -127,65 +97,25 @@ struct MatrixCompressor {
 	}
 
 	std::unique_ptr<MatrixCompressor[]> sons = nullptr;
-	u64 rank = 0;
-	std::array<u64, 4> size;
+	u32 rank = 0;
+	std::array<u32, 4> size;
 	eg::MatrixXd U;
 	eg::VectorXd singularvalues;
 	eg::MatrixXd V;
 };
 
-Eigen::MatrixXd generateRandomMatrix(int N, double min, double max) {
-	// Generate NxN matrix with random values in the range [-1, 1]
-	Eigen::MatrixXd random_matrix = Eigen::MatrixXd::Random(N, N);
+void saveToBMP(const eg::MatrixXd& R, const eg::MatrixXd& G, const eg::MatrixXd& B, const std::string& filename) {
+	u32 height = R.rows();
+	u32 width = R.cols();
 
-	// Scale and shift values to the specified range [min, max]
-	random_matrix = 0.5 * (random_matrix + Eigen::MatrixXd::Ones(N, N)); // Scale to [0, 1]
-	random_matrix = (max - min) * random_matrix + Eigen::MatrixXd::Constant(N, N, min); // Scale to [min, max]
+	// BMP file header
+	uint8_t fileHeader[14] = { 0x42, 0x4D, 0, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0 };
 
-	return random_matrix;
-}
+	// BMP information header
+	uint8_t infoHeader[40] = { 40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 24, 0, 0, 0, 0, 0,
+							   0,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0, 0, 0, 0, 0 };
 
-struct RGB {
-	uint8_t red;
-	uint8_t green;
-	uint8_t blue;
-};
-
-// Function to read a BMP file and return image dimensions and pixel data
-void saveToBMP(const MatrixXd& R, const MatrixXd& G, const MatrixXd& B, const std::string& filename) {
-	int height = R.rows();
-	int width = R.cols();
-
-	// Ensure the input matrices are of the correct size
-	if (G.rows() != height || G.cols() != width || B.rows() != height || B.cols() != width) {
-		throw std::invalid_argument("Input matrices must have the same dimensions.");
-	}
-
-	// BMP file header (14 bytes)
-	uint8_t fileHeader[14] = {
-		0x42, 0x4D, // Signature "BM"
-		0,	  0,	0, 0, // File size in bytes (will be filled later)
-		0,	  0, // Reserved
-		0,	  0, // Reserved
-		54,	  0,	0, 0 // Pixel data offset (54 bytes header)
-	};
-
-	// BMP information header (40 bytes)
-	uint8_t infoHeader[40] = {
-		40, 0, 0, 0, // Header size (40 bytes)
-		0,	0, 0, 0, // Image width (will be filled later)
-		0,	0, 0, 0, // Image height (will be filled later)
-		1,	0, // Planes (1)
-		24, 0, // Bits per pixel (24 bpp)
-		0,	0, 0, 0, // Compression (0 - none)
-		0,	0, 0, 0, // Image size (can be 0 for no compression)
-		0,	0, 0, 0, // X pixels per meter (not specified)
-		0,	0, 0, 0, // Y pixels per meter (not specified)
-		0,	0, 0, 0, // Total colors (0 - default)
-		0,	0, 0, 0 // Important colors (0 - all)
-	};
-
-	// Fill in image dimensions in the info header
+	// dimensions
 	int fileSize = 54 + 3 * width * height;
 	fileHeader[2] = fileSize;
 	fileHeader[3] = fileSize >> 8;
@@ -202,62 +132,38 @@ void saveToBMP(const MatrixXd& R, const MatrixXd& G, const MatrixXd& B, const st
 	infoHeader[10] = height >> 16;
 	infoHeader[11] = height >> 24;
 
-	// Create the file
-	std::ofstream outFile(filename, std::ios::binary);
-	if (!outFile) {
-		throw std::ios_base::failure("Failed to open file for writing.");
-	}
+	auto file = std::ofstream(filename, std::ios::binary);
 
-	// Write headers
-	outFile.write(reinterpret_cast<char*>(fileHeader), sizeof(fileHeader));
-	outFile.write(reinterpret_cast<char*>(infoHeader), sizeof(infoHeader));
+	file.write(reinterpret_cast<char*>(fileHeader), sizeof(fileHeader));
+	file.write(reinterpret_cast<char*>(infoHeader), sizeof(infoHeader));
 
-	// BMP pixel data (bottom-to-top row order, padded to multiples of 4 bytes)
-	int rowPadding = (4 - (width * 3) % 4) % 4; // Each row must be a multiple of 4 bytes
-	std::vector<uint8_t> padding(rowPadding, 0);
+	u32 rowPadding = (4 - (width * 3) % 4) % 4;
+	auto padding = std::vector<uint8_t>(rowPadding, 0);
 
-	for (int y = height - 1; y >= 0; --y) {
-		for (int x = 0; x < width; ++x) {
-			outFile.put(static_cast<uint8_t>(B(y, x))); // Blue
-			outFile.put(static_cast<uint8_t>(G(y, x))); // Green
-			outFile.put(static_cast<uint8_t>(R(y, x))); // Red
+	for (u32 y = height - 1; y != (u32)-1; --y) {
+		for (u32 x = 0; x < width; ++x) {
+			file.put(static_cast<uint8_t>(B(y, x)));
+			file.put(static_cast<uint8_t>(G(y, x)));
+			file.put(static_cast<uint8_t>(R(y, x)));
 		}
-		outFile.write(reinterpret_cast<char*>(padding.data()), rowPadding);
+		file.write(reinterpret_cast<char*>(padding.data()), rowPadding);
 	}
 
-	outFile.close();
-	std::cout << "Image saved to " << filename << "\n";
+	std::cout << std::format("RGB {}x{} saved to '{}'\n", width, height, filename);
 }
 
-void saveGridToBMP(const MatrixXd& M, const std::string& filename) {
-	int height = M.rows();
-	int width = M.cols();
+void saveMToBMP(const eg::MatrixXd& M, const std::string& mode, const std::string& filename) {
+	u32 height = M.rows();
+	u32 width = M.cols();
 
-	// BMP file header (14 bytes)
-	uint8_t fileHeader[14] = {
-		0x42, 0x4D, // Signature "BM"
-		0,	  0,	0, 0, // File size in bytes (will be filled later)
-		0,	  0, // Reserved
-		0,	  0, // Reserved
-		54,	  0,	0, 0 // Pixel data offset (54 bytes header)
-	};
+	// BMP file header
+	uint8_t fileHeader[14] = { 0x42, 0x4D, 0, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0 };
 
-	// BMP information header (40 bytes)
-	uint8_t infoHeader[40] = {
-		40, 0, 0, 0, // Header size (40 bytes)
-		0,	0, 0, 0, // Image width (will be filled later)
-		0,	0, 0, 0, // Image height (will be filled later)
-		1,	0, // Planes (1)
-		24, 0, // Bits per pixel (24 bpp)
-		0,	0, 0, 0, // Compression (0 - none)
-		0,	0, 0, 0, // Image size (can be 0 for no compression)
-		0,	0, 0, 0, // X pixels per meter (not specified)
-		0,	0, 0, 0, // Y pixels per meter (not specified)
-		0,	0, 0, 0, // Total colors (0 - default)
-		0,	0, 0, 0 // Important colors (0 - all)
-	};
+	// BMP information header
+	uint8_t infoHeader[40] = { 40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 24, 0, 0, 0, 0, 0,
+							   0,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0, 0, 0, 0, 0 };
 
-	// Fill in image dimensions in the info header
+	// dimensions
 	int fileSize = 54 + 3 * width * height;
 	fileHeader[2] = fileSize;
 	fileHeader[3] = fileSize >> 8;
@@ -274,211 +180,109 @@ void saveGridToBMP(const MatrixXd& M, const std::string& filename) {
 	infoHeader[10] = height >> 16;
 	infoHeader[11] = height >> 24;
 
-	// Create the file
-	std::ofstream outFile(filename, std::ios::binary);
-	if (!outFile) {
-		throw std::ios_base::failure("Failed to open file for writing.");
-	}
+	auto file = std::ofstream(filename, std::ios::binary);
 
-	// Write headers
-	outFile.write(reinterpret_cast<char*>(fileHeader), sizeof(fileHeader));
-	outFile.write(reinterpret_cast<char*>(infoHeader), sizeof(infoHeader));
+	file.write(reinterpret_cast<char*>(fileHeader), sizeof(fileHeader));
+	file.write(reinterpret_cast<char*>(infoHeader), sizeof(infoHeader));
 
-	// BMP pixel data (bottom-to-top row order, padded to multiples of 4 bytes)
-	int rowPadding = (4 - (width * 3) % 4) % 4; // Each row must be a multiple of 4 bytes
-	std::vector<uint8_t> padding(rowPadding, 0);
+	u32 rowPadding = (4 - (width * 3) % 4) % 4;
+	auto padding = std::vector<uint8_t>(rowPadding, 0);
 
-	for (int y = height - 1; y >= 0; --y) {
-		for (int x = 0; x < width; ++x) {
-			if (M(y, x) == 0) {
-				outFile.put(0); // Blue
-				outFile.put(0); // Green
-				outFile.put(255); // Red
-			} else {
-				outFile.put(255); // Blue
-				outFile.put(255); // Green
-				outFile.put(255); // Red
+	for (u32 y = height - 1; y != (u32)-1; --y) {
+		for (u32 x = 0; x < width; ++x) {
+			auto val = M(y, x);
+			if (mode == "R") {
+				file.put(0);
+				file.put(0);
+				file.put(val);
+			} else if (mode == "G") {
+				file.put(0);
+				file.put(val);
+				file.put(0);
+			} else if (mode == "B") {
+				file.put(val);
+				file.put(0);
+				file.put(0);
+			} else if (mode == "grid") {
+				if (val == 0) {
+					file.put(0);
+					file.put(0);
+					file.put(0);
+				} else {
+					file.put(255);
+					file.put(255);
+					file.put(255);
+				}
 			}
-			// outFile.put(static_cast<uint8_t>(M(y, x))); // Blue
-			// outFile.put(static_cast<uint8_t>(M(y, x))); // Green
-			// outFile.put(static_cast<uint8_t>(M(y, x))); // Red
 		}
-		outFile.write(reinterpret_cast<char*>(padding.data()), rowPadding);
+		file.write(reinterpret_cast<char*>(padding.data()), rowPadding);
 	}
 
-	outFile.close();
-	std::cout << "Image saved to " << filename << "\n";
+	std::cout << std::format("Grid {}x{} saved to '{}'\n", width, height, filename);
 }
 
-// Function to read a BMP file and return Eigen Matrices as a tuple
-std::tuple<MatrixXd, MatrixXd, MatrixXd> readFromBMP(const std::string& filename) {
-	std::ifstream inFile(filename, std::ios::binary);
-	if (!inFile) {
-		throw std::ios_base::failure("Failed to open file for reading.");
-	}
+std::tuple<eg::MatrixXd, eg::MatrixXd, eg::MatrixXd> readFromBMP(const std::string& filename) {
+	auto file = std::ifstream(filename, std::ios::binary);
 
-	// Read BMP file header
-	uint8_t fileHeader[14];
-	inFile.read(reinterpret_cast<char*>(fileHeader), sizeof(fileHeader));
+	uint8_t fileHeader[14]{};
+	file.read(reinterpret_cast<char*>(fileHeader), sizeof(fileHeader));
 
-	// Read BMP info header
-	uint8_t infoHeader[40];
-	inFile.read(reinterpret_cast<char*>(infoHeader), sizeof(infoHeader));
+	uint8_t infoHeader[40]{};
+	file.read(reinterpret_cast<char*>(infoHeader), sizeof(infoHeader));
 
-	// Extract width and height
-	int width = infoHeader[4] | (infoHeader[5] << 8) | (infoHeader[6] << 16) | (infoHeader[7] << 24);
-	int height = infoHeader[8] | (infoHeader[9] << 8) | (infoHeader[10] << 16) | (infoHeader[11] << 24);
+	u32 width = infoHeader[4] | (infoHeader[5] << 8) | (infoHeader[6] << 16) | (infoHeader[7] << 24);
+	u32 height = infoHeader[8] | (infoHeader[9] << 8) | (infoHeader[10] << 16) | (infoHeader[11] << 24);
 
-	// Ensure 24 bpp (3 bytes per pixel)
-	if (infoHeader[14] != 24) {
-		throw std::runtime_error("Only 24 bpp BMP files are supported.");
-	}
+	auto R = eg::MatrixXd(height, width);
+	auto G = eg::MatrixXd(height, width);
+	auto B = eg::MatrixXd(height, width);
 
-	// Initialize matrices
-	MatrixXd R(height, width);
-	MatrixXd G(height, width);
-	MatrixXd B(height, width);
-
-	// Pixel data offset
 	int dataOffset = fileHeader[10] | (fileHeader[11] << 8) | (fileHeader[12] << 16) | (fileHeader[13] << 24);
-	inFile.seekg(dataOffset, std::ios::beg);
+	file.seekg(dataOffset, std::ios::beg);
 
 	// Read pixel data (bottom-to-top row order, padded to multiples of 4 bytes)
 	int rowPadding = (4 - (width * 3) % 4) % 4;
 	for (int y = height - 1; y >= 0; --y) {
 		for (int x = 0; x < width; ++x) {
-			B(y, x) = inFile.get();
-			G(y, x) = inFile.get();
-			R(y, x) = inFile.get();
+			B(y, x) = file.get();
+			G(y, x) = file.get();
+			R(y, x) = file.get();
 		}
-		inFile.ignore(rowPadding);
+		file.ignore(rowPadding);
 	}
 
-	inFile.close();
-	std::cout << "Image read from " << filename << "\n";
-	return std::make_tuple(R, G, B);
+	std::cout << std::format("Read {}x{} image from '{}'\n", width, height, filename);
+	return std::make_tuple(std::move(R), std::move(G), std::move(B));
 }
 
-// std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd> loadImageAsMatrices(const std::string& imagePath) {
-//	cv::Mat img = cv::imread(imagePath);
-//	if (img.empty()) {
-//		throw std::runtime_error("Image not found!");
-//	}
-//
-//	cv::Mat imgFloat;
-//	img.convertTo(imgFloat, CV_64F);
-//
-//	int rows = img.rows, cols = img.cols;
-//	Eigen::MatrixXd R(rows, cols), G(rows, cols), B(rows, cols);
-//
-//	for (int i = 0; i < rows; ++i) {
-//		for (int j = 0; j < cols; ++j) {
-//			cv::Vec3b intensity = img.at<cv::Vec3b>(i, j);
-//			R(i, j) = intensity[2]; // OpenCV uses BGR
-//			G(i, j) = intensity[1];
-//			B(i, j) = intensity[0];
-//		}
-//	}
-//
-//	return { R, G, B };
-// }
-
-// void drawMatrix(const Eigen::MatrixXd& M, const std::string& outputPath) {
-//	Eigen::MatrixXd normalized = M;
-//	normalized = (normalized - normalized.minCoeff()) / (normalized.maxCoeff() - normalized.minCoeff()) * 255.0;
-//
-//	cv::Mat img(M.rows(), M.cols(), CV_8UC1);
-//	for (int i = 0; i < M.rows(); ++i) {
-//		for (int j = 0; j < M.cols(); ++j) {
-//			img.at<uchar>(i, j) = static_cast<uchar>(normalized(i, j));
-//		}
-//	}
-//
-//	cv::imwrite(outputPath, img);
-// }
-
-// void drawBitmap(
-//	const Eigen::MatrixXd& R,
-//	const Eigen::MatrixXd& G,
-//	const Eigen::MatrixXd& B,
-//	const std::string& outputPath
-//) {
-//	int rows = R.rows(), cols = R.cols();
-//	cv::Mat img(rows, cols, CV_8UC3);
-//
-//	for (int i = 0; i < rows; ++i) {
-//		for (int j = 0; j < cols; ++j) {
-//			img.at<cv::Vec3b>(i, j)[2] = static_cast<uchar>(R(i, j));
-//			img.at<cv::Vec3b>(i, j)[1] = static_cast<uchar>(G(i, j));
-//			img.at<cv::Vec3b>(i, j)[0] = static_cast<uchar>(B(i, j));
-//		}
-//	}
-//
-//	cv::imwrite(outputPath, img);
-// }
-
 int main() {
-	try {
-		const u64 N = 3;
+	std::string mode;
+	std::cout << "mode (manual or auto) = ";
+	std::cin >> mode;
+	if (mode != "manual" and mode != "auto") {
+		return 1;
+	}
 
-		eg::MatrixXd A = /*eg::MatrixXd{
-			{ -0.997497,	 0.617481, -0.299417 },
-			{  0.127171,	0.170019,  0.791925 },
-			{ -0.613392, -0.0402539,	 0.64568 }
-		};*/
-			eg::MatrixXd::Random(N, N);
+	std::string path;
+	std::cout << "File: ";
+	std::cin >> path;
 
-		A *= 255;
+	auto [R, G, B] = readFromBMP(path);
+	u32 height = R.rows();
+	u32 width = R.cols();
 
-		eg::MatrixXd decompressed_A = eg::MatrixXd::Zero(N, N);
+	fs::create_directory(fs::current_path() / "results");
 
-		auto compressed_a = MatrixCompressor(A, 0, N, 0, N, 1, 0.1);
-		compressed_a.decompress(decompressed_A);
-
-		std::cout << A << "\n\n";
-		std::cout << decompressed_A << '\n';
-
-		// generateRandomMatrix(N, -1, 1);
-
-		// Eigen::MatrixXd A(8, 8);
-
-		//// Initialize the matrix with the given values
-		// A << -0.997497, 0.64568, -0.817194, -0.982177, -0.0984222, 0.751946, 0.724479, -0.467574,
-		// 0.127171, 0.49321,
-		//	-0.271096, -0.24424, -0.295755, 0.453352, -0.580798, -0.405438, -0.613392, -0.651784, -0.705374,
-		// 0.0633259, 	-0.885922, 0.911802, 0.559313, 0.680288, 0.617481, 0.717887, -0.668203, 0.142369,
-		// 0.215369, 0.851436,
-		// 0.687307, 	-0.952513, 0.170019, 0.421003, 0.97705, 0.203528, 0.566637, 0.0787072, 0.993591,
-		// -0.248268,
-		//-0.0402539, 	0.0270699, -0.108615, 0.214331, 0.605213, -0.715323, 0.99939, -0.814753, -0.299417,
-		//-0.39201, -0.761834, 	-0.667531, 0.0397656, -0.0758385, 0.222999, 0.354411, 0.791925,
-		//-0.970031, -0.990661, 0.32609, -0.3961, 	-0.529344, -0.215125, -0.88757;
-
-		// std::cout << A << '\n';
-
-		int height, width;
-		std::string path;
-		int rank;
+	if (mode == "manual") {
+		u32 rank;
 		double epsilon;
-		std::cin >> path >> rank >> epsilon;
-		auto [R, G, B] = readFromBMP(path);
-		height = R.rows();
-		width = R.cols();
 
-		// auto saveTestFile = std::ofstream("test.bmp");
-		saveToBMP(R, G, B, "test.bmp");
+		std::cout << "rank = ";
+		std::cin >> rank;
+		std::cout << "epsilon = ";
+		std::cin >> epsilon;
 
-		/*auto Rv_ = std::vector<double>();
-		std::ranges::transform(Rv, std::back_inserter(Rv_), [](const uint8_t v) { return (double)v; });
-		auto Gv_ = std::vector<double>();
-		std::ranges::transform(Gv, std::back_inserter(Gv_), [](const uint8_t v) { return (double)v; });
-		auto Bv_ = std::vector<double>();
-		std::ranges::transform(Bv, std::back_inserter(Bv_), [](const uint8_t v) { return (double)v; });
-
-		eg::MatrixXd R = eg::Map<Eigen::MatrixXd>(Rv_.data(), height, width);
-		eg::MatrixXd G = eg::Map<Eigen::MatrixXd>(Gv_.data(), height, width);
-		eg::MatrixXd B = eg::Map<Eigen::MatrixXd>(Bv_.data(), height, width);*/
-
+		// paralellize compression
 		auto compressed_R_future =
 			std::async(std::launch::async, [&]() { return MatrixCompressor(R, 0, height, 0, width, rank, epsilon); });
 		auto compressed_G_future =
@@ -498,38 +302,122 @@ int main() {
 		compressed_G.decompress(decompressed_G);
 		compressed_B.decompress(decompressed_B);
 
-		// std::vector<uint8_t> decRV;
-		// std::vector<uint8_t> decGV;
-		// std::vector<uint8_t> decBV;
+		saveMToBMP(decompressed_R, "R", std::format("results/manual_R.bmp"));
+		saveMToBMP(decompressed_G, "G", std::format("results/manual_G.bmp"));
+		saveMToBMP(decompressed_B, "B", std::format("results/manual_B.bmp"));
+		saveMToBMP(compressed_R.grid(), "grid", std::format("results/manual_R_grid.bmp"));
+		saveMToBMP(compressed_G.grid(), "grid", std::format("results/manual_G_grid.bmp"));
+		saveMToBMP(compressed_B.grid(), "grid", std::format("results/manual_B_grid.bmp"));
+		saveToBMP(decompressed_R, decompressed_G, decompressed_B, std::format("results/manual_decompressed_RGB.bmp"));
 
-		// for (int i = 0; i < decompressed_R.rows(); ++i) {
-		//	for (int j = 0; j < decompressed_R.cols(); ++j) {
-		//		decRV.push_back(decompressed_R(i, j)); // Add element at (i, j) to the vector
-		//		decGV.push_back(decompressed_G(i, j)); // Add element at (i, j) to the vector
-		//		decBV.push_back(decompressed_B(i, j)); // Add element at (i, j) to the vector
-		//	}
-		//	std::cout << '\n';
-		// }
+		return 0;
+	}
 
-		// std::cout << (decRV == Rv) << '\n';
-		// std::cout << (decGV == Gv) << '\n';
-		// std::cout << (decBV == Bv) << '\n';
-		/*std::cout << decRV.size() << '\n';
-		std::cout << decGV.size() << '\n';
-		std::cout << decBV.size() << '\n';*/
+	saveToBMP(R, G, B, "results/RBG.bmp");
+	saveMToBMP(R, "R", "results/R.bmp");
+	saveMToBMP(G, "G", "results/G.bmp");
+	saveMToBMP(B, "B", "results/B.bmp");
 
-		// auto ofile = std::ofstream("xd2.bmp");
+	eg::VectorXd svs_R = eg::BDCSVD(R, eg::ComputeThinU | eg::ComputeThinV).singularValues();
+	eg::VectorXd svs_G = eg::BDCSVD(G, eg::ComputeThinU | eg::ComputeThinV).singularValues();
+	eg::VectorXd svs_B = eg::BDCSVD(B, eg::ComputeThinU | eg::ComputeThinV).singularValues();
 
-		auto grid_R = compressed_R.grid();
-		auto grid_G = compressed_G.grid();
-		auto grid_B = compressed_B.grid();
+	{
+		auto file = std::ofstream("results/svs_R.txt");
+		for (auto&& sv : svs_R) {
+			file << std::format("{}\n", sv);
+		}
+	}
+	{
+		auto file = std::ofstream("results/svs_G.txt");
+		for (auto&& sv : svs_G) {
+			file << std::format("{}\n", sv);
+		}
+	}
+	{
+		auto file = std::ofstream("results/svs_B.txt");
+		for (auto&& sv : svs_B) {
+			file << std::format("{}\n", sv);
+		}
+	}
 
-		saveGridToBMP(grid_R, "grid_R.bmp");
-		saveGridToBMP(grid_G, "grid_G.bmp");
-		saveGridToBMP(grid_B, "grid_B.bmp");
+	for (u32 rank : { 1, 4 }) {
+		for (auto epsilon_of : { 'R', 'G', 'B' }) {
+			for (auto epsilon_mode : { "first"sv, "middle"sv, "last"sv }) {
+				std::cout << std::format(
+					"work = (rank: {}, epsilon_of: {}, epsilon_mode: {})\n",
+					rank,
+					epsilon_of,
+					epsilon_mode
+				);
 
-		saveToBMP(decompressed_R, decompressed_G, decompressed_B, "xd2.bmp");
-	} catch (std::runtime_error& e) {
-		std::cout << e.what() << '\n';
+				double epsilon = [&]() {
+					auto&& svs = epsilon_of == 'R' ? svs_R : (epsilon_of == 'G' ? svs_G : svs_B);
+
+					return svs
+						[epsilon_mode == "first" ? 0 : (epsilon_mode == "last" ? svs.size() - 1 : svs.size() / 2)];
+				}();
+
+				// paralellize compression
+				auto compressed_R_future = std::async(std::launch::async, [&]() {
+					return MatrixCompressor(R, 0, height, 0, width, rank, epsilon);
+				});
+				auto compressed_G_future = std::async(std::launch::async, [&]() {
+					return MatrixCompressor(G, 0, height, 0, width, rank, epsilon);
+				});
+				auto compressed_B_future = std::async(std::launch::async, [&]() {
+					return MatrixCompressor(B, 0, height, 0, width, rank, epsilon);
+				});
+
+				auto compressed_R = compressed_R_future.get();
+				auto compressed_G = compressed_G_future.get();
+				auto compressed_B = compressed_B_future.get();
+
+				eg::MatrixXd decompressed_R = eg::MatrixXd::Zero(height, width);
+				eg::MatrixXd decompressed_G = eg::MatrixXd::Zero(height, width);
+				eg::MatrixXd decompressed_B = eg::MatrixXd::Zero(height, width);
+
+				compressed_R.decompress(decompressed_R);
+				compressed_G.decompress(decompressed_G);
+				compressed_B.decompress(decompressed_B);
+
+				saveMToBMP(
+					decompressed_R,
+					"R",
+					std::format("results/R_r{}_eps_{}_{}.bmp", rank, epsilon_of, epsilon_mode)
+				);
+				saveMToBMP(
+					decompressed_G,
+					"G",
+					std::format("results/G_r{}_eps_{}_{}.bmp", rank, epsilon_of, epsilon_mode)
+				);
+				saveMToBMP(
+					decompressed_B,
+					"B",
+					std::format("results/B_r{}_eps_{}_{}.bmp", rank, epsilon_of, epsilon_mode)
+				);
+				saveMToBMP(
+					compressed_R.grid(),
+					"grid",
+					std::format("results/R_grid_r{}_eps_{}_{}.bmp", rank, epsilon_of, epsilon_mode)
+				);
+				saveMToBMP(
+					compressed_G.grid(),
+					"grid",
+					std::format("results/G_grid_r{}_eps_{}_{}.bmp", rank, epsilon_of, epsilon_mode)
+				);
+				saveMToBMP(
+					compressed_B.grid(),
+					"grid",
+					std::format("results/B_grid_r{}_eps_{}_{}.bmp", rank, epsilon_of, epsilon_mode)
+				);
+				saveToBMP(
+					decompressed_R,
+					decompressed_G,
+					decompressed_B,
+					std::format("results/decompressed_RGB_r{}_eps_{}_{}.bmp", rank, epsilon_of, epsilon_mode)
+				);
+			}
+		}
 	}
 }
