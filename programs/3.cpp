@@ -268,6 +268,14 @@ std::tuple<eg::MatrixXd, eg::MatrixXd, eg::MatrixXd> readFromBMP(const std::stri
 	return std::make_tuple(std::move(R), std::move(G), std::move(B));
 }
 
+u64 bytes(const eg::MatrixXd& M) noexcept {
+	return sizeof(M) + M.size() * sizeof(double);
+}
+
+u64 bytes(const MatrixCompressor& C) noexcept {
+	return C.bytes();
+}
+
 int main() {
 	std::string mode;
 	std::cout << "mode (manual or auto) = ";
@@ -317,8 +325,23 @@ int main() {
 
 		std::cout << std::format(
 			"RGB = {}\ncompressed_RGB = {}\n",
-			3 * (R.size() * sizeof(double) + sizeof(R)),
+			3 * bytes(R),
 			compressed_R.bytes() + compressed_G.bytes() + compressed_B.bytes()
+		);
+		std::cout << std::format(
+			"errors R:\n\tmean: {}\n\tMSE: {}\n",
+			(R - decompressed_R).cwiseAbs().mean(),
+			(R - decompressed_R).cwiseAbs2().mean()
+		);
+		std::cout << std::format(
+			"errors G:\n\tmean: {}\n\tMSE: {}\n",
+			(G - decompressed_G).cwiseAbs().mean(),
+			(G - decompressed_G).cwiseAbs2().mean()
+		);
+		std::cout << std::format(
+			"errors B:\n\tmean: {}\n\tMSE: {}\n",
+			(B - decompressed_B).cwiseAbs().mean(),
+			(B - decompressed_B).cwiseAbs2().mean()
 		);
 
 		saveMToBMP(decompressed_R, "R", std::format("results/manual_R.bmp"));
@@ -332,10 +355,15 @@ int main() {
 		return 0;
 	}
 
+	auto compression_size_file = std::ofstream("results/sizes.txt");
+	auto errors_file = std::ofstream("results/errors.txt");
+	errors_file << "M\tmean\tMSE\n";
+	compression_size_file << std::format("original_RGB\t{}\n", 3 * bytes(R));
+	compression_size_file << std::format("original_R\t{}\n", bytes(R));
+	compression_size_file << std::format("original_G\t{}\n", bytes(G));
+	compression_size_file << std::format("original_B\t{}\n", bytes(B));
+
 	saveToBMP(R, G, B, "results/RBG.bmp");
-	saveMToBMP(R, "R", "results/R.bmp");
-	saveMToBMP(G, "G", "results/G.bmp");
-	saveMToBMP(B, "B", "results/B.bmp");
 
 	eg::VectorXd svs_R = eg::BDCSVD(R, eg::ComputeThinU | eg::ComputeThinV).singularValues();
 	eg::VectorXd svs_G = eg::BDCSVD(G, eg::ComputeThinU | eg::ComputeThinV).singularValues();
@@ -435,6 +463,37 @@ int main() {
 					decompressed_G,
 					decompressed_B,
 					std::format("results/decompressed_RGB_r{}_eps_{}_{}.bmp", rank, epsilon_of, epsilon_mode)
+				);
+				compression_size_file << std::format(
+					"RGB_r{}_eps_{}_{}\t{}\n",
+					rank,
+					epsilon_of,
+					epsilon_mode,
+					compressed_R.bytes() + compressed_G.bytes() + compressed_B.bytes()
+				);
+				errors_file << std::format(
+					"R_r{}_eps_{}_{}\t{}\t{}\n",
+					rank,
+					epsilon_of,
+					epsilon_mode,
+					(R - decompressed_R).cwiseAbs().mean(),
+					(R - decompressed_R).cwiseAbs2().mean()
+				);
+				errors_file << std::format(
+					"G_r{}_eps_{}_{}\t{}\t{}\n",
+					rank,
+					epsilon_of,
+					epsilon_mode,
+					(G - decompressed_G).cwiseAbs().mean(),
+					(G - decompressed_G).cwiseAbs2().mean()
+				);
+				errors_file << std::format(
+					"B_r{}_eps_{}_{}\t{}\t{}\n",
+					rank,
+					epsilon_of,
+					epsilon_mode,
+					(B - decompressed_B).cwiseAbs().mean(),
+					(B - decompressed_B).cwiseAbs2().mean()
 				);
 			}
 		}
