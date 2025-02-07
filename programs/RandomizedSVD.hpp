@@ -29,7 +29,7 @@ using std::min;
 
 class RandomizedSvd {
 public:
-	RandomizedSvd(const MatrixXd& m, int rank, int oversamples = 10, int iter = 2): U_(), V_(), S_() {
+	RandomizedSvd(const MatrixXd& m, int rank, int oversamples = 100, int iter = 16): U_(), V_(), S_() {
 		ComputeRandomizedSvd(m, rank, oversamples, iter);
 	}
 

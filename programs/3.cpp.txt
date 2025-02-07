@@ -363,7 +363,7 @@ int main() {
 	compression_size_file << std::format("original_G\t{}\n", bytes(G));
 	compression_size_file << std::format("original_B\t{}\n", bytes(B));
 
-	saveToBMP(R, G, B, "results/RGB.bmp");
+	saveToBMP(R, G, B, "results/RBG.bmp");
 
 	eg::VectorXd svs_R = eg::BDCSVD(R, eg::ComputeThinU | eg::ComputeThinV).singularValues();
 	eg::VectorXd svs_G = eg::BDCSVD(G, eg::ComputeThinU | eg::ComputeThinV).singularValues();
@@ -424,16 +424,9 @@ int main() {
 				eg::MatrixXd decompressed_G = eg::MatrixXd::Zero(height, width);
 				eg::MatrixXd decompressed_B = eg::MatrixXd::Zero(height, width);
 
-				auto decompressed_R_future =
-					std::async(std::launch::async, [&]() { compressed_R.decompress(decompressed_R); });
-				auto decompressed_G_future =
-					std::async(std::launch::async, [&]() { compressed_G.decompress(decompressed_G); });
-				auto decompressed_B_future =
-					std::async(std::launch::async, [&]() { compressed_B.decompress(decompressed_B); });
-
-				decompressed_R_future.wait();
-				decompressed_G_future.wait();
-				decompressed_B_future.wait();
+				compressed_R.decompress(decompressed_R);
+				compressed_G.decompress(decompressed_G);
+				compressed_B.decompress(decompressed_B);
 
 				saveMToBMP(
 					decompressed_R,
